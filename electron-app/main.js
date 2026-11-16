@@ -64,6 +64,35 @@ ipcMain.handle('fix', async (e, { ids, backup }) => {
 
 ipcMain.handle('open-backup', (_e, p) => { if (p && isDir(p)) shell.openPath(p); });
 
+
+// ---------------------------------------------------------------- tag songs (runs ../tagger.py with Python + mutagen)
+const { spawn } = require('child_process');
+function runTagger(args) {
+  const script = path.join(__dirname, '..', 'tagger.py');
+  const tries = process.platform === 'win32' ? ['python', 'py', 'python3'] : ['python3', 'python'];
+  return new Promise((resolve, reject) => {
+    const attempt = (i) => {
+      if (i >= tries.length) return reject(new Error('Python 3 was not found. Install it from python.org, then run: pip install mutagen'));
+      const p = spawn(tries[i], [script, ...args], { env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+      let out = '', err = '';
+      p.stdout.on('data', (d) => (out += d)); p.stderr.on('data', (d) => (err += d));
+      p.on('error', () => attempt(i + 1));
+      p.on('close', (code) => {
+        if (code !== 0 && /No module named 'mutagen'/.test(err)) return reject(new Error('Missing a Python package. Run: pip install mutagen'));
+        if (code !== 0) return reject(new Error(err.trim().split('\n').pop() || 'Tagging failed'));
+        try { resolve(JSON.parse(out)); } catch { reject(new Error('Unexpected output from tagger')); }
+      });
+    };
+    attempt(0);
+  });
+}
+ipcMain.handle('tag-run', async (_e, { link, folder, apply, backup }) => {
+  if (!isDir(folder)) throw new Error('That folder no longer exists.');
+  const args = [link, folder, '--json'];
+  if (apply) { args.push('--apply'); if (!backup) args.push('--no-backup'); }
+  return runTagger(args);
+});
+
 // ---------------------------------------------------------------- headless self-test (used only when LFF_TEST_FOLDER is set)
 async function runSelfTest() {
   const folder = process.env.LFF_TEST_FOLDER, shotDir = process.env.LFF_SHOT_DIR || __dirname;

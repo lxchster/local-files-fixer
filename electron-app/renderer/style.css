@@ -143,3 +143,20 @@ h1 { margin: 6px 0 0; font-size: 32px; line-height: 1.1; font-weight: 800; lette
 .dialog p { margin: 0 0 22px; color: var(--muted); font-size: 13.5px; user-select: text; word-break: break-word; }
 .dialog p b { color: var(--text); }
 .mrow { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* ---- main menu + tag view ---- */
+[hidden] { display: none !important; }
+.back { margin-left: 10px; padding: 5px 14px; font-size: 12px; vertical-align: middle; }
+.menu { margin: auto; text-align: center; }
+.menucards { display: flex; gap: 20px; margin-top: 28px; justify-content: center; }
+.mcard { width: 340px; padding: 30px 28px; color: var(--text); font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 12px; align-items: center; transition: transform .15s, border-color .15s; }
+.mcard:hover { transform: translateY(-3px); border-color: var(--green); }
+.mcard b { font-size: 19px; }
+.mcard span { color: var(--muted); font-size: 13px; }
+.mcard i { font-style: normal; margin-top: 8px; }
+.tagform { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 12px; align-items: center; padding: 14px; }
+.tagform .input { grid-column: 1 / -1; width: 100%; color: var(--text); user-select: text; outline: none; }
+.tagrow, #tRows .row { display: grid; grid-template-columns: 2.2fr 1.6fr 1.6fr 1.4fr .6fr; gap: 12px; }
+#tRows .row { padding: 9px 16px; align-items: center; font-size: 13px; }
+#tRows .row.bad { color: var(--amber); }
+#tRows .row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -844,6 +844,7 @@ def run_gui(initial_folder=None):
                      font=tkfont.Font(family=FAM, size=8, weight="bold"), bg=BG, padx=16, radius=15,
                      autosize=True).pack(anchor="w")
             GradTitle(head, "Local Files ", "Fixer").pack(anchor="w", pady=(8, 0))
+            RoundButton(head, "← Menu", self.root._go_menu, "secondary", bg=BG, padx=18, height=36).place(relx=1.0, y=4, anchor="ne")
             tk.Label(head, bg=BG, fg=MUTED, font=(FAM, 11), justify="left", anchor="w",
                      text="Clean, safe repairs for the hidden problems that make local files grey out or fail to "
                           "match between your PC, Mac and phone.").pack(anchor="w", pady=(2, 0))
@@ -1144,8 +1145,208 @@ def run_gui(initial_folder=None):
             self.busy = False
             self.set_busy(False)
 
+    class TagView:
+        """Tag songs from a Google-Sheets tracker: preview the matches, then write the tags."""
+
+        def __init__(self, root):
+            self.root = root
+            self.q = queue.Queue()
+            self.items = []
+            self.folder = None
+            self.busy = False
+            root.title(APP_TITLE + " - Tag songs")
+            root.configure(bg=BG)
+            App._style(None)
+            r = root
+            P = 26
+            r.columnconfigure(0, weight=1)
+            r.rowconfigure(4, weight=1)
+            head = tk.Frame(r, bg=BG)
+            head.grid(row=0, column=0, sticky="ew", padx=P, pady=(22, 8))
+            GradTitle(head, "Tag ", "songs from a tracker").pack(anchor="w")
+            tk.Label(head, bg=BG, fg=MUTED, font=(FAM, 11), anchor="w", justify="left",
+                     text="Matches each file to the artist's tracker by title and length, then writes the title, "
+                          "artist (features comma-separated), album and the era's cover.").pack(anchor="w", pady=(2, 0))
+            RoundButton(head, "← Menu", root._go_menu, "secondary", bg=BG, padx=18, height=36).place(relx=1.0, y=4, anchor="ne")
+
+            c1 = card(r, glow=True)
+            c1.grid(row=1, column=0, sticky="ew", padx=P, pady=(10, 6))
+            c1.columnconfigure(1, weight=1)
+            small_caps(c1, "Tracker link").grid(row=0, column=0, sticky="w", padx=16, pady=(14, 0))
+            self.link_var = tk.StringVar()
+            ent = tk.Entry(c1, textvariable=self.link_var, bg=PANEL2, fg=TEXT, insertbackground=TEXT, relief="flat",
+                           font=(FAM, 10), highlightthickness=1, highlightbackground=BORDER, highlightcolor=BORDER_HI)
+            ent.grid(row=0, column=1, columnspan=2, sticky="ew", padx=(8, 16), pady=(14, 0), ipady=8)
+            RoundButton(c1, "Choose folder…", self.choose, "primary", bg=PANEL).grid(row=1, column=0, padx=16, pady=14)
+            self.path_var = tk.StringVar(value="No folder chosen yet")
+            RoundBox(c1, textvariable=self.path_var, height=42, bg=PANEL, radius=16).grid(
+                row=1, column=1, sticky="ew", pady=14, padx=(8, 8))
+            self.prev_btn = RoundButton(c1, "Find matches", self.preview, "secondary", bg=PANEL)
+            self.prev_btn.grid(row=1, column=2, padx=(0, 16), pady=14)
+
+            oc = card(r)
+            oc.grid(row=2, column=0, sticky="ew", padx=P, pady=6)
+            oc.columnconfigure(0, weight=1)
+            self.backup_var = tk.BooleanVar(value=True)
+            ttk.Checkbutton(oc, variable=self.backup_var, style="Dark.TCheckbutton",
+                            text="Back up originals (recommended)").grid(row=0, column=0, padx=18, pady=10, sticky="w")
+            self.go_btn = RoundButton(oc, "Write tags", self.apply, "primary", bg=PANEL, state="disabled")
+            self.go_btn.grid(row=0, column=1, padx=16, pady=8, sticky="e")
+
+            self.status = tk.StringVar(value="Paste the tracker link, choose the folder with the songs, then Find matches.")
+            tk.Label(r, textvariable=self.status, bg=BG, fg=MUTED, font=(FAM, 10), anchor="w").grid(
+                row=3, column=0, sticky="w", padx=P, pady=(6, 0))
+
+            rc = card(r)
+            rc.grid(row=4, column=0, sticky="nsew", padx=P, pady=(6, 22))
+            rc.columnconfigure(0, weight=1)
+            rc.rowconfigure(0, weight=1)
+            cols = ("file", "title", "artist", "album", "cover")
+            self.tree = ttk.Treeview(rc, columns=cols, show="headings", style="Dark.Treeview", selectmode="browse")
+            for c, w, t in (("file", 280, "File"), ("title", 200, "Title"), ("artist", 200, "Artist"),
+                            ("album", 180, "Album"), ("cover", 70, "Cover")):
+                self.tree.heading(c, text=t)
+                self.tree.column(c, width=w, anchor="w")
+            self.tree.tag_configure("bad", foreground=WARN)
+            sb = ttk.Scrollbar(rc, orient="vertical", command=self.tree.yview, style="Dark.Vertical.TScrollbar")
+            self.tree.configure(yscrollcommand=sb.set)
+            self.tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=10)
+            sb.grid(row=0, column=1, sticky="ns", pady=10, padx=(0, 6))
+            dark_titlebar(root)
+            root.after(80, self._poll)
+
+        def choose(self):
+            d = filedialog.askdirectory(title="Choose the folder with the songs to tag")
+            if d:
+                self.folder = d
+                self.path_var.set(d)
+
+        def _run(self, fn):
+            self.busy = True
+            self.go_btn.configure(state="disabled")
+            self.prev_btn.configure(state="disabled")
+
+            def work():
+                try:
+                    self.q.put(("done",) + fn())
+                except Exception as e:
+                    self.q.put(("err", str(e)))
+            threading.Thread(target=work, daemon=True).start()
+
+        def preview(self):
+            link, folder = self.link_var.get().strip(), self.folder
+            if not link or not folder:
+                messagebox.showinfo(APP_TITLE, "Paste the tracker link and choose a folder first.")
+                return
+            self.status.set("Reading the tracker…")
+
+            def fn():
+                import tagger
+                tr = tagger.load_tracker(link, lambda m: self.q.put(("msg", m)))
+                return ("preview", tagger.plan(tr, folder))
+            self._run(fn)
+
+        def apply(self):
+            todo = [i for i in self.items if i.get("matched")]
+            if not todo:
+                return
+            msg = "Write tags to %d file(s)?" % len(todo)
+            if self.backup_var.get():
+                msg += "\n\nOriginals are copied to a backup folder next to yours first."
+            if not messagebox.askyesno(APP_TITLE, msg):
+                return
+            self.status.set("Writing tags…")
+            folder, backup = self.folder, self.backup_var.get()
+
+            def fn():
+                import tagger
+                res = tagger.apply(self.items, folder, backup, lambda m: self.q.put(("msg", m)))
+                return ("applied", res)
+            self._run(fn)
+
+        def _poll(self):
+            try:
+                while True:
+                    m = self.q.get_nowait()
+                    if m[0] == "msg":
+                        self.status.set(m[1])
+                    elif m[0] == "err":
+                        self.status.set(m[1])
+                        self.busy = False
+                        self.prev_btn.configure(state="normal")
+                        messagebox.showerror(APP_TITLE, m[1])
+                    elif m[0] == "done":
+                        self.busy = False
+                        self.prev_btn.configure(state="normal")
+                        if m[1] == "preview":
+                            self.items = m[2]
+                            for i in self.tree.get_children():
+                                self.tree.delete(i)
+                            for it in self.items:
+                                if it.get("matched"):
+                                    vals = (it["rel"], it["title"], it["artist"], it["album"], "yes" if it["cover"] else "no")
+                                    self.tree.insert("", "end", values=vals, tags=() if it["cover"] else ("bad",))
+                                else:
+                                    self.tree.insert("", "end", values=(it["rel"], "no match", "", "", ""), tags=("bad",))
+                            n = sum(1 for it in self.items if it.get("matched"))
+                            self.status.set("%d of %d files matched. Check the list, then Write tags." % (n, len(self.items)))
+                            self.go_btn.configure(state="normal" if n else "disabled")
+                        else:
+                            res = m[2]
+                            self.status.set("Tagged %d file(s), %d failed.%s" % (
+                                res["ok"], res["bad"], (" Backup: " + res["backup"]) if res["backup"] else ""))
+            except queue.Empty:
+                pass
+            if self.root.winfo_exists():
+                self.root.after(80, self._poll)
+
+    class MainMenu:
+        def __init__(self, root):
+            root.title(APP_TITLE)
+            root.configure(bg=BG)
+            wrap = tk.Frame(root, bg=BG)
+            wrap.place(relx=0.5, rely=0.5, anchor="center")
+            GradTitle(wrap, "Local Files ", "Toolkit", size=34).pack()
+            tk.Label(wrap, bg=BG, fg=MUTED, font=(FAM, 11), text="What do you want to do?").pack(pady=(4, 24))
+            row = tk.Frame(wrap, bg=BG)
+            row.pack()
+            for i, (title, sub, cmd) in enumerate((
+                    ("Fix local files", "Repair hidden MP3 / M4A problems that make\nSpotify local files grey out or mismatch.", root._go_fix),
+                    ("Tag songs", "Match files to an artist's song tracker and\nadd title, artist, album and cover art.", root._go_tag))):
+                c = card(row, glow=True)
+                c.grid(row=0, column=i, padx=12)
+                tk.Label(c, text=title, bg=PANEL, fg=TEXT, font=(FAM, 16, "bold")).pack(padx=36, pady=(28, 6))
+                tk.Label(c, text=sub, bg=PANEL, fg=MUTED, font=(FAM, 10), justify="center").pack(padx=36, pady=(0, 18))
+                RoundButton(c, "Open", cmd, "primary", bg=PANEL).pack(pady=(0, 28))
+            dark_titlebar(root)
+
     root = tk.Tk()
-    root._app = App(root)
+    root.geometry("1200x960")
+    root.minsize(980, 720)
+
+    def clear():
+        for w in root.winfo_children():
+            w.destroy()
+        for i in range(8):
+            root.columnconfigure(i, weight=0)
+            root.rowconfigure(i, weight=0)
+
+    def go_menu():
+        clear()
+        MainMenu(root)
+
+    def go_fix():
+        clear()
+        root._app = App(root)
+
+    def go_tag():
+        clear()
+        root._tag = TagView(root)
+    root._go_menu, root._go_fix, root._go_tag = go_menu, go_fix, go_tag
+    if initial_folder and os.path.isdir(initial_folder):
+        go_fix()
+    else:
+        go_menu()
     root.mainloop()
 
 

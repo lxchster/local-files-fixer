@@ -12,9 +12,43 @@
   <div class="glow g2"></div>
   <div class="dragbar"><span class="brand"><i></i>Local Files Fixer</span></div>
 
-  <main class="wrap">
+  <main class="wrap" id="viewMenu">
+    <div class="menu">
+      <h1>Local Files <span class="grad">Toolkit</span></h1>
+      <p class="sub">What do you want to do?</p>
+      <div class="menucards">
+        <button class="card edge mcard" data-go="fix"><b>Fix local files</b><span>Repair hidden MP3 / M4A problems that make Spotify local files grey out or mismatch.</span><i class="btn primary">Open</i></button>
+        <button class="card edge mcard" data-go="tag"><b>Tag songs</b><span>Match files to an artist's song tracker and add title, artist, album and cover art.</span><i class="btn primary">Open</i></button>
+      </div>
+    </div>
+  </main>
+
+  <main class="wrap" id="viewTag" hidden>
     <header class="hero">
-      <span class="tag">SPOTIFY LOCAL FILES</span>
+      <span class="tag">SONG TRACKER</span> <button class="btn ghost back" data-go="menu">← Menu</button>
+      <h1>Tag <span class="grad">songs</span></h1>
+      <p class="sub">Matches each file to the tracker by title and length, then writes title, artist (features comma-separated), album and the era's cover.</p>
+    </header>
+    <section class="card edge folder tagform">
+      <input id="tLink" class="field input" type="text" placeholder="Paste the tracker link (Google Sheets)" spellcheck="false">
+      <button id="tChoose" class="btn primary">Choose folder…</button>
+      <div id="tPath" class="field">No folder chosen yet</div>
+      <button id="tFind" class="btn ghost" disabled>Find matches</button>
+    </section>
+    <section class="progress"><div id="tStatus" class="status">Paste the link, choose the folder with the songs, then Find matches.</div></section>
+    <section class="card list">
+      <div class="thead tagrow"><span>File</span><span>Title</span><span>Artist</span><span>Album</span><span>Cover</span></div>
+      <div id="tRows" class="rows"></div>
+    </section>
+    <section class="actions">
+      <button id="tApply" class="btn primary" disabled>Write tags</button>
+      <label class="chip backup"><input type="checkbox" id="tBackup" checked><span class="box"></span><span>Back up originals <em>(recommended)</em></span></label>
+    </section>
+  </main>
+
+  <main class="wrap" id="viewFix" hidden>
+    <header class="hero">
+      <span class="tag">SPOTIFY LOCAL FILES</span> <button class="btn ghost back" data-go="menu">← Menu</button>
       <h1>Local Files <span class="grad">Fixer</span></h1>
       <p class="sub">Clean, safe repairs for the hidden problems that make local files grey out or fail to match between your PC, Mac and phone.</p>
     </header>
@@ -86,5 +120,6 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="tag.js"></script>
 </body>
 </html>

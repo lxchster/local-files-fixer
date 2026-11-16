@@ -62,3 +62,14 @@ The fixes come from debugging a real library where tracks were greyed out in pla
 - Close Spotify first if a file can't be written.
 - After fixing, restart Spotify, copy the fixed files to your other devices, and re-add the affected songs to your playlists.
 - Not affiliated with Spotify.
+
+## Main menu and Tag songs
+
+Both apps now open on a main menu: **Fix local files** or **Tag songs**.
+
+Tag songs matches each file to a public Google-Sheets song tracker (paste the link) by title and length, then writes title (versions as `V1`, `V2`), artist (features comma-separated), album (the era) and the era cover. It shows the matches first and backs up originals before writing. Needs `pip install mutagen`.
+
+```bash
+python tagger.py "<tracker link>" "D:\Music\folder"            # preview
+python tagger.py "<tracker link>" "D:\Music\folder" --apply    # write tags
+```
