@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local Files Fixer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="glow g1"></div>
+  <div class="glow g2"></div>
+  <div class="dragbar"><span class="brand"><i></i>Local Files Fixer</span></div>
+
+  <main class="wrap">
+    <header class="hero">
+      <span class="tag">SPOTIFY LOCAL FILES</span>
+      <h1>Local Files <span class="grad">Fixer</span></h1>
+      <p class="sub">Clean, safe repairs for the hidden problems that make local files grey out or fail to match between your PC, Mac and phone.</p>
+    </header>
+
+    <section class="card edge folder">
+      <button id="choose" class="btn primary">Choose folder…</button>
+      <div id="path" class="field" title="">No folder chosen yet</div>
+      <button id="rescan" class="btn ghost" disabled>Scan again</button>
+    </section>
+
+    <section class="tiles">
+      <div class="card tile" data-k="scanned"><div class="tl">Audio files scanned</div><div class="tn">–</div><div class="ts">&nbsp;</div></div>
+      <div class="card tile" data-k="fix"><div class="tl">Need fixing</div><div class="tn">–</div><div class="ts">&nbsp;</div></div>
+      <div class="card tile" data-k="junk"><div class="tl">Mac leftovers</div><div class="tn">–</div><div class="ts">&nbsp;</div></div>
+      <div class="card tile" data-k="opt"><div class="tl">Optional tidy-ups</div><div class="tn">–</div><div class="ts">&nbsp;</div></div>
+    </section>
+
+    <section class="card options">
+      <span class="tl">What to fix</span>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" data-cat="mp3" checked><span class="box"></span><span>MP3 length header</span></label>
+        <label class="chip"><input type="checkbox" data-cat="m4a" checked><span class="box"></span><span>M4A gapless tag</span></label>
+        <label class="chip"><input type="checkbox" data-cat="junk" checked><span class="box"></span><span>Mac leftovers</span></label>
+        <label class="chip"><input type="checkbox" data-cat="minor"><span class="box"></span><span>Minor tag tidy-up <em>(optional)</em></span></label>
+        <label class="chip backup"><input type="checkbox" id="backup" checked><span class="box"></span><span>Back up originals <em>(recommended)</em></span></label>
+      </div>
+    </section>
+
+    <section class="progress">
+      <div class="bar"><i id="barFill"></i></div>
+      <div id="status" class="status">Choose a folder to begin — or drag one onto this window.</div>
+    </section>
+
+    <section class="card list">
+      <div class="thead"><span></span><span>File</span><span>Problem</span><span>What the fix does</span><span></span></div>
+      <div id="rows" class="rows"></div>
+      <div id="empty" class="empty">Choose a folder to scan.</div>
+    </section>
+
+    <section class="actions">
+      <button id="fixAll" class="btn primary" disabled>Fix everything ticked</button>
+      <button id="fixSel" class="btn ghost" disabled>Fix selected rows</button>
+      <span class="hint" id="hint">Click rows to select them</span>
+      <button id="openBk" class="btn ghost right" disabled>Open backup folder</button>
+    </section>
+
+    <section class="card log" id="logCard">
+      <button id="logToggle" class="logbar" aria-expanded="false"><span class="tl">Log</span><span id="logLast" class="loglast">Nothing yet</span><span class="chev">⌃</span></button>
+      <div id="log" class="logbody"></div>
+    </section>
+
+    <footer class="card edge features">
+      <div><b>Safe backups</b><span>Originals are saved before any change.</span></div>
+      <div><b>Verified changes</b><span>Every fix is checked before it is swapped in.</span></div>
+      <div><b>Audio untouched</b><span>Only hidden headers and tags change.</span></div>
+      <div><b>Skips the unsure</b><span>Odd files are left exactly as they are.</span></div>
+    </footer>
+  </main>
+
+  <div id="modal" class="modal" aria-hidden="true">
+    <div class="dialog card edge" role="dialog" aria-modal="true">
+      <h3 id="mTitle">Fix items?</h3>
+      <p id="mBody"></p>
+      <div class="mrow">
+        <button id="modalCancel" class="btn ghost">Cancel</button>
+        <button id="modalOk" class="btn primary">Fix now</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

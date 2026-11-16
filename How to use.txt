@@ -1,0 +1,45 @@
+LOCAL FILES FIXER
+=================
+
+Finds and fixes the hidden problems in .mp3 / .m4a files that make Spotify "Local files"
+grey out, or fail to match between your PC, Mac and phone.
+
+TWO VERSIONS (they find and fix exactly the same things)
+  NEW LOOK (recommended)   Double-click "Run Local Files Fixer (new look).bat"
+                           Rounded, Spotify-style window. Lives in the "electron-app" folder.
+  CLASSIC                  Double-click "Run Local Files Fixer.bat"  (plain Python window)
+
+HOW TO USE
+  1. Open the app.
+  2. Click "Choose folder..." (or drag a folder onto the window) and pick your music folder.
+     It scans straight away, including sub-folders.
+  3. Look at the list. Leave "Back up originals" ticked.
+  4. Click "Fix everything ticked". (Or click some rows to select them, then "Fix selected rows".)
+  5. Restart Spotify. If you use the same files on another device, copy the fixed files there too,
+     then remove and re-add the affected songs in your playlists.
+
+WHAT IT FIXES
+  MP3 length header   A hidden header frame that different apps count differently, so they
+                      disagree on a song's length by a second (or much more). It is removed;
+                      no audio changes. Variable-bitrate MP3s are left alone.
+  M4A gapless tag     A tag that says the song is a different length than it really is.
+                      Only three numbers inside the tag are corrected.
+  Mac leftovers       .DS_Store files, "__MACOSX" folders and "._" companion files.
+  Minor tidy-up       (off by default) a gapless tag that is off by a tiny amount.
+
+SAFETY
+  - Every change is written to a temporary file, checked, then swapped in.
+  - With "Back up originals" ticked, the original of every changed file is saved in a folder next to
+    the one you chose, named "<folder> - backup <date and time>". Copy files back from there to undo.
+  - Files that don't look exactly as expected are skipped and left untouched.
+  - Close Spotify first if it tells you a file couldn't be written.
+
+ON A MAC
+  New look: install Node.js, copy the whole "Local Files Fixer" folder, then in Terminal:
+      cd electron-app && npm install && npx electron .
+  Classic:  python3 local_files_fixer.py
+
+COMMAND LINE (optional, no window)
+  node electron-app/src/cli.js "D:\Music"                 just list the problems
+  node electron-app/src/cli.js "D:\Music" --fix           fix them (with backup)
+  add --no-backup to skip backups, --minor to include the minor tidy-up

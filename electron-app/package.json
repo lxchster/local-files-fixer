@@ -1,0 +1,16 @@
+{
+  "name": "local-files-fixer",
+  "productName": "Local Files Fixer",
+  "version": "1.0.0",
+  "description": "Finds and fixes hidden problems in .mp3/.m4a files that make Spotify local files grey out or mismatch between devices.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "scan": "node src/cli.js"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "electron": "^45.3.3"
+  }
+}
