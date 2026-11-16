@@ -5,9 +5,9 @@ Finds and fixes the hidden problems in .mp3 / .m4a files that make Spotify "Loca
 grey out, or fail to match between your PC, Mac and phone.
 
 TWO VERSIONS (they find and fix exactly the same things)
-  NEW LOOK (recommended)   Double-click "Run Local Files Fixer (new look).bat"
+  NEW LOOK (recommended)   Double-click "Local Files Toolkit.bat"
                            Rounded, Spotify-style window. Lives in the "electron-app" folder.
-  CLASSIC                  Double-click "Run Local Files Fixer.bat"  (plain Python window)
+  CLASSIC                  Run "python local_files_fixer.py" (plain Python window)
 
 HOW TO USE
   1. Open the app.

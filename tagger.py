@@ -87,7 +87,34 @@ def split_people(txt):
     return out
 
 
-def parse_name_cell(cell):
+_AKA = re.compile(
+    r"(?:also\s+known\s+as|a\.?k\.?a\.?|alternately\s+(?:titled|known\s+as)|alternatively\s+(?:titled|known\s+as)"
+    r"|previously\s+(?:titled|known\s+as)|originally\s+(?:titled|named|called)|(?:was\s+)?(?:also\s+)?(?:titled|named|called))"
+    r"\s*[:\-]?\s*[\"\u201c\u2018']([^\"\u201d\u2019'\n]{2,60})[\"\u201d\u2019']", re.I)
+
+
+def find_alt_names(lines, notes, base_title):
+    """Preferred-name choices: the parenthesised names under the features, else 'also known as' in the notes."""
+    alts = []
+    for l in lines[1:]:
+        if re.match(r"^\(\s*(feat|ft|with|prod|ref|remix|cover)\b", l, re.I):
+            continue
+        m = re.fullmatch(r"\((.+)\)", l)
+        if not m or re.search(r"\b(feat|prod)\.", m.group(1), re.I):
+            continue
+        for part in re.split(r"\s*,\s*", m.group(1)):
+            part = part.strip(" \"'*")
+            if part and part.lower() != base_title.lower() and part not in alts:
+                alts.append(part)
+    if not alts:
+        for m in _AKA.finditer(notes or ""):
+            part = m.group(1).strip()
+            if part and part.lower() != base_title.lower() and part not in alts:
+                alts.append(part)
+    return alts
+
+
+def parse_name_cell(cell, notes=""):
     """-> dict(title, artists[list], key_with_artist, key)"""
     lines = [l.strip() for l in strip_emoji(cell).replace("\r", "").split("\n") if l.strip()]
     first = strip_lead(lines[0]) if lines else ""
@@ -114,8 +141,9 @@ def parse_name_cell(cell):
             artists.append(a)
     if prefix and MAIN_ARTIST and MAIN_ARTIST.lower() not in [x.lower() for x in artists] and re.search(re.escape(MAIN_ARTIST), rest, re.I):
         artists.append(MAIN_ARTIST)
+    alts = [f"{a} {ver}" if ver else a for a in find_alt_names(lines, notes, base)]
     return {
-        "title": title, "base": base, "ver": ver, "artists": artists,
+        "title": title, "base": base, "ver": ver, "artists": artists, "alts": alts,
         "key": norm(title), "key_artist": norm((prefix or "") + title),
     }
 
@@ -147,13 +175,16 @@ def parse_song_rows(rows):
         return []
     c_era = 0
     c_len = col("track length", "length")
+    c_notes = col("notes")
     out = []
     for r in rows[1:]:
         if len(r) <= c_name or not r[c_name].strip() or not r[c_era].strip():
             continue
-        p = parse_name_cell(r[c_name])
+        p = parse_name_cell(r[c_name], r[c_notes] if c_notes is not None and len(r) > c_notes else "")
         if not p["title"]:
             continue
+        if "\n" in r[c_era].strip() or re.search(r"Total (Full|Released)|OG File", r[c_era]):
+            continue  # an era header row (its first cell is a stats block), not a song
         p["era"] = strip_emoji(r[c_era]).strip()
         p["len"] = parse_len(r[c_len]) if c_len is not None and len(r) > c_len else None
         p["raw"] = r[c_name].split("\n")[0]
@@ -220,29 +251,35 @@ def load_covers(sid, gid, era_order=None):
         h = _get(f"https://docs.google.com/spreadsheets/d/{sid}/htmlview/sheet?headers=true&gid={gid}", timeout=120)
     except Exception:
         return covers
-    heads = []
+    def cell_text(c):
+        return htmlmod.unescape(re.sub(r"<[^>]+>", "\n", c.replace("<br>", "\n")))
+
+    pending = None   # a header whose era name is only inside a banner image: take it from the next song row
     for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", h, re.S):
-        if "<img" not in tr:
-            continue
         cells = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
-        if len(cells) < 4 or "Total Full" not in cells[0]:
+        if len(cells) < 2:
             continue
-        name_txt = htmlmod.unescape(re.sub(r"<[^>]+>", "\n", cells[1].replace("<br>", "\n")))
-        era = next((l.strip() for l in name_txt.split("\n") if l.strip()), "")
+        is_head = "Total Full" in cells[0] or "Total Released" in cells[0]
+        if not is_head:
+            if pending is not None:
+                era = next((l.strip() for l in cell_text(cells[0]).split("\n") if l.strip()), "")
+                if era and not re.search(r"\d+ (Single|Total|OG)", era):
+                    covers.setdefault(era_key(strip_emoji(era)), {"era": strip_emoji(era), "url": pending})
+                    pending = None
+            continue
+        pending = None
+        era = next((l.strip() for l in cell_text(cells[1]).split("\n") if l.strip()), "")
         cover = None
         for c in cells[2:6]:
             m = re.search(r'<img src="([^"]+sheets-images-rt[^"]+)"', c)
             if m:
-                cover = m.group(1)
-        if cover:
-            heads.append((era, re.sub(r"=w\d+-h\d+$", "=s1200", cover)))
-    seq = era_order or []
-    aligned = len(seq) == len(heads)
-    for i, (era, url) in enumerate(heads):
-        if not era and aligned:
-            era = seq[i]
+                cover = re.sub(r"=w\d+-h\d+$", "=s1200", m.group(1))
+        if not cover:
+            continue
         if era:
-            covers.setdefault(era_key(era), {"era": era, "url": url})
+            covers.setdefault(era_key(strip_emoji(era)), {"era": strip_emoji(era), "url": cover})
+        else:
+            pending = cover
     return covers
 
 
@@ -267,6 +304,33 @@ def scan_covers(h, known, covers):
         urls.sort(key=lambda u: 1 if "=w425" in u else 0)
         if urls:
             covers[era[0]] = {"era": era[1], "url": re.sub(r"=w\d+-h\d+$", "=s1200", urls[0])}
+
+
+_STOP = {"the", "with", "era", "collab", "collaboration", "collaborations", "and", "of", "a", "feat"}
+
+
+def _tokens(s):
+    return {w for w in re.findall(r"[a-z0-9]+", unicodedata.normalize("NFKD", s).lower()) if w not in _STOP}
+
+
+def find_cover(tracker, era):
+    """Cover for an era: exact name, else the closest era/header name on the sheet."""
+    covers = tracker["covers"]
+    k = era_key(era)
+    if k in covers:
+        return covers[k]
+    want = _tokens(era)
+    best, score = None, 0.0
+    for key, c in covers.items():
+        have = _tokens(c["era"])
+        if want and have:
+            sc = len(want & have) / float(len(want | have))
+        else:
+            sc = 0.0
+        sc = max(sc, difflib.SequenceMatcher(None, k, key).ratio() - 0.2)
+        if sc > score:
+            best, score = c, sc
+    return best if score >= 0.5 else None
 
 
 def ensure_covers(tracker, eras):
@@ -374,8 +438,8 @@ def plan(tracker, folder, era=None):
         it = {"path": p, "rel": os.path.relpath(p, folder), "note": note}
         if song:
             era_name = clean_era(song["era"])
-            cov = tracker["covers"].get(era_key(song["era"]))
-            it.update(title=song["title"], artist=", ".join(song["artists"]), album=era_name,
+            cov = find_cover(tracker, song["era"])
+            it.update(title=song["title"], alts=song.get("alts", []), artist=", ".join(song["artists"]), album=era_name,
                       cover=cov["url"] if cov else None, matched=True)
         else:
             it.update(matched=False)
@@ -389,10 +453,16 @@ _cover_cache = {}
 
 def fetch_cover(url):
     if url not in _cover_cache:
-        data = _get(url, binary=True)
-        mime = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
-        if data[:4] == b"RIFF" or data[:3] == b"GIF":
-            raise RuntimeError("unsupported cover image format")
+        if os.path.isfile(url):          # a cover image chosen by hand
+            data = open(url, "rb").read()
+        else:
+            data = _get(url, binary=True)
+        if data[:8] == b"\x89PNG\r\n\x1a\n":
+            mime = "image/png"
+        elif data[:2] == b"\xff\xd8":
+            mime = "image/jpeg"
+        else:
+            raise RuntimeError("unsupported cover image format (use a JPG or PNG)")
         _cover_cache[url] = (data, mime)
     return _cover_cache[url]
 
@@ -445,6 +515,21 @@ def default_backup_root(folder):
     return os.path.join(os.path.dirname(folder), f"{os.path.basename(folder)} - tag backup {st}")
 
 
+def apply_cover(items, path):
+    """Use one image the user picked as the cover for every matched file."""
+    if path:
+        for it in items:
+            if it.get("matched"):
+                it["cover"] = path
+
+
+def apply_overrides(items, overrides):
+    for it in items:
+        t = (overrides or {}).get(it["rel"])
+        if t and it.get("matched"):
+            it["title"] = t
+
+
 def apply(items, folder, backup=True, log=None):
     log = log or print
     root = default_backup_root(folder) if backup else None
@@ -477,6 +562,10 @@ def main(argv):
     if len(args) < 2:
         print(__doc__)
         return 2
+    if "--overrides" in argv:
+        args = [a for a in args if a != argv[argv.index("--overrides") + 1]]
+    if "--cover" in argv:
+        args = [a for a in args if a != argv[argv.index("--cover") + 1]]
     if "--artist" in argv:
         artist = argv[argv.index("--artist") + 1]
         args = [a for a in args if a != artist]
@@ -486,6 +575,10 @@ def main(argv):
     as_json = "--json" in flags
     tr = load_tracker(link, None if as_json else (lambda s: print(s, file=sys.stderr)), artist=artist)
     items = plan(tr, folder, era)
+    if "--overrides" in argv:
+        apply_overrides(items, json.loads(argv[argv.index("--overrides") + 1]))
+    if "--cover" in argv:
+        apply_cover(items, argv[argv.index("--cover") + 1])
     result = {"items": items}
     if "--apply" in flags:
         result["result"] = apply(items, folder, "--no-backup" not in flags, (lambda s: None) if as_json else print)

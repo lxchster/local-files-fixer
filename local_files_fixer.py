@@ -798,8 +798,8 @@ def run_gui(initial_folder=None):
             self._target = self._shown = 0.0
             root.title(APP_TITLE)
             root.configure(bg=BG)
-            root.geometry("1200x960")
-            root.minsize(980, 720)
+            root.geometry("1200x800")
+            root.minsize(980, 640)
             self._style()
             self._build()
             dark_titlebar(root)
@@ -1190,8 +1190,13 @@ def run_gui(initial_folder=None):
             self.backup_var = tk.BooleanVar(value=True)
             ttk.Checkbutton(oc, variable=self.backup_var, style="Dark.TCheckbutton",
                             text="Back up originals (recommended)").grid(row=0, column=0, padx=18, pady=10, sticky="w")
+            self.cover_path = None
+            self.cover_var = tk.StringVar(value="Covers: from the tracker")
+            tk.Label(oc, textvariable=self.cover_var, bg=PANEL, fg=MUTED, font=(FAM, 10)).grid(row=0, column=1, padx=8)
+            RoundButton(oc, "Choose cover…", self.pick_cover, "secondary", bg=PANEL, height=38).grid(row=0, column=2, padx=4, pady=8)
+            RoundButton(oc, "Use tracker covers", self.clear_cover, "secondary", bg=PANEL, height=38).grid(row=0, column=3, padx=4, pady=8)
             self.go_btn = RoundButton(oc, "Write tags", self.apply, "primary", bg=PANEL, state="disabled")
-            self.go_btn.grid(row=0, column=1, padx=16, pady=8, sticky="e")
+            self.go_btn.grid(row=0, column=4, padx=16, pady=8, sticky="e")
 
             self.status = tk.StringVar(value="Paste the tracker link, choose the folder with the songs, then Find matches.")
             tk.Label(r, textvariable=self.status, bg=BG, fg=MUTED, font=(FAM, 10), anchor="w").grid(
@@ -1208,12 +1213,41 @@ def run_gui(initial_folder=None):
                 self.tree.heading(c, text=t)
                 self.tree.column(c, width=w, anchor="w")
             self.tree.tag_configure("bad", foreground=WARN)
+            self.tree.bind("<ButtonRelease-1>", self.pick_name)
             sb = ttk.Scrollbar(rc, orient="vertical", command=self.tree.yview, style="Dark.Vertical.TScrollbar")
             self.tree.configure(yscrollcommand=sb.set)
             self.tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=10)
             sb.grid(row=0, column=1, sticky="ns", pady=10, padx=(0, 6))
             dark_titlebar(root)
             root.after(80, self._poll)
+
+        def pick_name(self, event):
+            """Click a file to choose its preferred name (alternate names listed on the tracker)."""
+            iid = self.tree.identify_row(event.y)
+            if not iid or self.busy:
+                return
+            it = self.items[int(iid)]
+            if not it.get("matched"):
+                return
+            names = [it["orig_title"]] + [a for a in it.get("alts", []) if a != it["orig_title"]]
+            if len(names) < 2:
+                self.status.set("No other names listed for \"%s\" - keeping its title." % it["orig_title"])
+                return
+            menu = tk.Menu(self.root, tearoff=0, bg=PANEL2, fg=TEXT, activebackground=SELECT, activeforeground="#ffffff",
+                           bd=0, relief="flat", font=(FAM, 10))
+
+            def use(n):
+                it["title"] = n
+                self.tree.set(iid, "title", n)
+            for n in names:
+                menu.add_command(label=("\u2713  " if n == it["title"] else "     ") + n +
+                                 ("   (tracker's main name)" if n == it["orig_title"] else ""),
+                                 command=lambda n=n: use(n))
+            x, y, w, h = self.tree.bbox(iid, "title") or (event.x, event.y, 0, 0)
+            try:
+                menu.tk_popup(self.tree.winfo_rootx() + x, self.tree.winfo_rooty() + y + h)
+            finally:
+                menu.grab_release()
 
         def choose(self):
             d = filedialog.askdirectory(title="Choose the folder with the songs to tag")
@@ -1246,7 +1280,28 @@ def run_gui(initial_folder=None):
                 return ("preview", tagger.plan(tr, folder))
             self._run(fn)
 
+        def pick_cover(self):
+            f = filedialog.askopenfilename(title="Choose a cover image for all the files",
+                                           filetypes=[("Images", "*.jpg *.jpeg *.png"), ("All files", "*.*")])
+            if f:
+                self.cover_path = f
+                self.cover_var.set("Cover for all: " + os.path.basename(f))
+                for iid in self.tree.get_children():
+                    if self.items[int(iid)].get("matched"):
+                        self.tree.set(iid, "cover", "manual")
+
+        def clear_cover(self):
+            self.cover_path = None
+            self.cover_var.set("Covers: from the tracker")
+            for iid in self.tree.get_children():
+                it = self.items[int(iid)]
+                if it.get("matched"):
+                    self.tree.set(iid, "cover", "yes" if it.get("cover") else "no")
+
         def apply(self):
+            if self.cover_path:
+                import tagger
+                tagger.apply_cover(self.items, self.cover_path)
             todo = [i for i in self.items if i.get("matched")]
             if not todo:
                 return
@@ -1282,14 +1337,15 @@ def run_gui(initial_folder=None):
                             self.items = m[2]
                             for i in self.tree.get_children():
                                 self.tree.delete(i)
-                            for it in self.items:
+                            for idx, it in enumerate(self.items):
+                                it["orig_title"] = it.get("title")
                                 if it.get("matched"):
                                     vals = (it["rel"], it["title"], it["artist"], it["album"], "yes" if it["cover"] else "no")
-                                    self.tree.insert("", "end", values=vals, tags=() if it["cover"] else ("bad",))
+                                    self.tree.insert("", "end", iid=str(idx), values=vals, tags=() if it["cover"] else ("bad",))
                                 else:
-                                    self.tree.insert("", "end", values=(it["rel"], "no match", "", "", ""), tags=("bad",))
+                                    self.tree.insert("", "end", iid=str(idx), values=(it["rel"], "no match", "", "", ""), tags=("bad",))
                             n = sum(1 for it in self.items if it.get("matched"))
-                            self.status.set("%d of %d files matched. Check the list, then Write tags." % (n, len(self.items)))
+                            self.status.set("%d of %d files matched. Click a file for a name dropdown, then Write tags." % (n, len(self.items)))
                             self.go_btn.configure(state="normal" if n else "disabled")
                         else:
                             res = m[2]
@@ -1304,6 +1360,14 @@ def run_gui(initial_folder=None):
         def __init__(self, root):
             root.title(APP_TITLE)
             root.configure(bg=BG)
+            try:  # topographic contour lines behind the menu
+                import topo
+                bgc = tk.Canvas(root, bg="#0e0e0e", highlightthickness=0, bd=0)
+                bgc.place(x=0, y=0, relwidth=1, relheight=1)
+                for (x1, y1), (x2, y2) in topo.segments(1200, 960, 12):
+                    bgc.create_line(x1, y1, x2, y2, fill="#202020")
+            except Exception:
+                pass
             wrap = tk.Frame(root, bg=BG)
             wrap.place(relx=0.5, rely=0.5, anchor="center")
             GradTitle(wrap, "Local Files ", "Toolkit", size=34).pack()
@@ -1321,8 +1385,8 @@ def run_gui(initial_folder=None):
             dark_titlebar(root)
 
     root = tk.Tk()
-    root.geometry("1200x960")
-    root.minsize(980, 720)
+    root.geometry("1200x800")
+    root.minsize(980, 640)
 
     def clear():
         for w in root.winfo_children():

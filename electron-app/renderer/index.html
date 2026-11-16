@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data: https://docs.google.com">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Local Files Fixer</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <canvas id="topo" aria-hidden="true"></canvas>
   <div class="glow g1"></div>
   <div class="glow g2"></div>
   <div class="dragbar"><span class="brand"><i></i>Local Files Fixer</span></div>
@@ -15,17 +16,18 @@
   <main class="wrap" id="viewMenu">
     <div class="menu">
       <h1>Local Files <span class="grad">Toolkit</span></h1>
+      <span class="tag">FOR SPOTIFY LOCAL FILES</span>
       <p class="sub">What do you want to do?</p>
       <div class="menucards">
-        <button class="card edge mcard" data-go="fix"><b>Fix local files</b><span>Repair hidden MP3 / M4A problems that make Spotify local files grey out or mismatch.</span><i class="btn primary">Open</i></button>
-        <button class="card edge mcard" data-go="tag"><b>Tag songs</b><span>Match files to an artist's song tracker and add title, artist, album and cover art.</span><i class="btn primary">Open</i></button>
+        <button class="card edge mcard" data-go="fix"><span class="micon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3be67f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg></span><b>Fix local files</b><span>Repair hidden MP3 / M4A problems that make Spotify local files grey out or mismatch.</span><i class="btn primary">Open</i></button>
+        <button class="card edge mcard" data-go="tag"><span class="micon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3be67f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span><b>Tag songs</b><span>Match files to an artist's song tracker and add title, artist, album and cover art.</span><i class="btn primary">Open</i></button>
       </div>
     </div>
   </main>
 
   <main class="wrap" id="viewTag" hidden>
     <header class="hero">
-      <span class="tag">SONG TRACKER</span> <button class="btn ghost back" data-go="menu">← Menu</button>
+      <button class="btn ghost back first" data-go="menu">← Menu</button>
       <h1>Tag <span class="grad">songs</span></h1>
       <p class="sub">Matches each file to the tracker by title and length, then writes title, artist (features comma-separated), album and the era's cover.</p>
     </header>
@@ -37,18 +39,21 @@
     </section>
     <section class="progress"><div id="tStatus" class="status">Paste the link, choose the folder with the songs, then Find matches.</div></section>
     <section class="card list">
-      <div class="thead tagrow"><span>File</span><span>Title</span><span>Artist</span><span>Album</span><span>Cover</span></div>
+      <div class="thead tagrow"><span>Cover</span><span>File</span><span>Title</span><span>Artist</span><span>Album</span><span>Match</span></div>
       <div id="tRows" class="rows"></div>
     </section>
     <section class="actions">
       <button id="tApply" class="btn primary" disabled>Write tags</button>
+      <button id="tCover" class="btn ghost">Choose cover for all…</button>
+      <button id="tCoverClear" class="btn ghost" hidden>Use tracker covers</button>
+      <span id="tCoverName" class="hint"></span>
       <label class="chip backup"><input type="checkbox" id="tBackup" checked><span class="box"></span><span>Back up originals <em>(recommended)</em></span></label>
     </section>
   </main>
 
   <main class="wrap" id="viewFix" hidden>
     <header class="hero">
-      <span class="tag">SPOTIFY LOCAL FILES</span> <button class="btn ghost back" data-go="menu">← Menu</button>
+      <button class="btn ghost back" data-go="menu">← Menu</button>
       <h1>Local Files <span class="grad">Fixer</span></h1>
       <p class="sub">Clean, safe repairs for the hidden problems that make local files grey out or fail to match between your PC, Mac and phone.</p>
     </header>
@@ -99,13 +104,6 @@
       <button id="logToggle" class="logbar" aria-expanded="false"><span class="tl">Log</span><span id="logLast" class="loglast">Nothing yet</span><span class="chev">⌃</span></button>
       <div id="log" class="logbody"></div>
     </section>
-
-    <footer class="card edge features">
-      <div><b>Safe backups</b><span>Originals are saved before any change.</span></div>
-      <div><b>Verified changes</b><span>Every fix is checked before it is swapped in.</span></div>
-      <div><b>Audio untouched</b><span>Only hidden headers and tags change.</span></div>
-      <div><b>Skips the unsure</b><span>Odd files are left exactly as they are.</span></div>
-    </footer>
   </main>
 
   <div id="modal" class="modal" aria-hidden="true">
@@ -119,6 +117,7 @@
     </div>
   </div>
 
+  <script src="topo.js"></script>
   <script src="app.js"></script>
   <script src="tag.js"></script>
 </body>

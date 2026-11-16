@@ -8,33 +8,62 @@
   go(window.__lffStartFix ? 'fix' : 'menu');
   if (window.api && window.api.initialFolder) window.api.initialFolder().then((f) => { if (f) go('fix'); }).catch(() => {});
 
-  let folder = null, items = [], busy = false;
+  let folder = null, items = [], busy = false, manual = null; // manual = { path, name, dataUrl }
+  const overrides = () => { const o = {}; for (const i of items) if (i.matched && i.title !== i.orig) o[i.rel] = i.title; return o; };
   const status = (t, tone) => { const s = $('#tStatus'); s.textContent = t; s.className = 'status' + (tone ? ' ' + tone : ''); };
   const refresh = () => {
+    const n = items.filter((i) => i.matched).length;
     $('#tFind').disabled = busy || !folder;
-    $('#tApply').disabled = busy || !items.some((i) => i.matched);
+    $('#tApply').disabled = busy || !n;
+    $('#tApply').textContent = n ? `Write tags to ${n} files` : 'Write tags';
     $('#tChoose').disabled = busy;
   };
+  const step = (n) => document.querySelectorAll('.steps span').forEach((s, i) => s.classList.toggle('on', i < n));
+
   function render() {
     const box = $('#tRows'); box.textContent = '';
     for (const it of items) {
       const row = document.createElement('div');
-      const vals = it.matched ? [it.rel, it.title, it.artist, it.album, it.cover ? 'yes' : 'no'] : [it.rel, 'no match', '', '', ''];
-      row.className = 'row' + (!it.matched || !it.cover ? ' bad' : '');
-      for (const v of vals) { const s = document.createElement('span'); s.textContent = v; s.title = v; row.appendChild(s); }
+      row.className = 'row' + (!it.matched || (!it.cover && !manual) ? ' bad' : '');
+      const cov = document.createElement('span'); cov.className = 'thumb';
+      if (it.matched && (manual || it.cover)) { const im = document.createElement('img'); im.src = manual ? manual.dataUrl : it.cover.replace(/=s\d+$/, '=s96'); im.alt = ''; cov.appendChild(im); }
+      row.appendChild(cov);
+      const cell = (v) => { const s = document.createElement('span'); s.textContent = v; s.title = v; return s; };
+      row.appendChild(cell(it.rel));
+      if (it.matched) {
+        const names = [it.orig, ...(it.alts || []).filter((a) => a !== it.orig)];
+        if (names.length > 1) {
+          const sel = document.createElement('select'); sel.className = 'namepick'; sel.setAttribute('aria-label', 'Preferred name for ' + it.rel);
+          for (const n of names) { const o = document.createElement('option'); o.value = n; o.textContent = n + (n === it.orig ? '  (main)' : ''); sel.appendChild(o); }
+          sel.value = it.title;
+          sel.addEventListener('change', () => { it.title = sel.value; });
+          row.appendChild(sel);
+        } else row.appendChild(cell(it.title));
+        row.appendChild(cell(it.artist)); row.appendChild(cell(it.album));
+        const m = cell(manual ? 'Manual cover' : it.cover ? 'Matched' : 'No cover'); m.className = 'match'; row.appendChild(m);
+      } else { row.appendChild(cell('no match')); row.appendChild(cell('')); row.appendChild(cell('')); row.appendChild(cell('')); }
       box.appendChild(row);
     }
   }
-  $('#tChoose').addEventListener('click', async () => { const f = await window.api.pickFolder(); if (f) { folder = f; $('#tPath').textContent = f; refresh(); } });
+
+  const setManual = (m) => {
+    manual = m; render();
+    $('#tCoverName').textContent = m ? 'Cover for all files: ' + m.name : '';
+    $('#tCoverClear').hidden = !m;
+  };
+  $('#tCover').addEventListener('click', async () => { const m = await window.api.pickImage(); if (m) setManual(m); });
+  $('#tCoverClear').addEventListener('click', () => setManual(null));
+  $('#tChoose').addEventListener('click', async () => { const f = await window.api.pickFolder(); if (f) { folder = f; $('#tPath').textContent = f; step(2); refresh(); } });
+  $('#tLink').addEventListener('input', () => step($('#tLink').value.trim() ? (folder ? 2 : 1) : 0));
   $('#tFind').addEventListener('click', async () => {
     const link = $('#tLink').value.trim();
     if (!link) return status('Paste the tracker link first.', 'warn');
     busy = true; refresh(); status('Reading the tracker and matching files…');
     try {
       const r = await window.api.tagRun(link, folder, false, true);
-      items = r.items; render();
+      items = r.items; items.forEach((i) => { i.orig = i.title; }); render(); step(3);
       const n = items.filter((i) => i.matched).length;
-      status(`${n} of ${items.length} files matched. Check the list, then Write tags.`);
+      status(`${n} of ${items.length} files matched. Use the dropdown to pick a different name, then write the tags.`, 'ok');
     } catch (e) { items = []; render(); status(e.message, 'warn'); }
     busy = false; refresh();
   });
@@ -43,9 +72,10 @@
     if (!confirm(`Write tags to ${n} file(s)?` + ($('#tBackup').checked ? '\n\nOriginals are copied to a backup folder next to yours first.' : ''))) return;
     busy = true; refresh(); status('Writing tags…');
     try {
-      const r = (await window.api.tagRun($('#tLink').value.trim(), folder, true, $('#tBackup').checked)).result;
+      const r = (await window.api.tagRun($('#tLink').value.trim(), folder, true, $('#tBackup').checked, overrides(), manual ? manual.path : null)).result;
       status(`Tagged ${r.ok} file(s), ${r.bad} failed.` + (r.backup ? ' Backup: ' + r.backup : ''), r.bad ? 'warn' : 'ok');
     } catch (e) { status(e.message, 'warn'); }
     busy = false; refresh();
   });
+  step(0);
 })();

@@ -15,8 +15,8 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   const mac = process.platform === 'darwin';
   win = new BrowserWindow({
-    width: 1180, height: 880, minWidth: 980, minHeight: 700,
-    backgroundColor: '#000000', title: 'Local Files Fixer',
+    width: 1180, height: 760, minWidth: 980, minHeight: 620,
+    backgroundColor: '#000000', title: 'Local Files Toolkit', icon: path.join(__dirname, 'icon.png'),
     titleBarStyle: mac ? 'hiddenInset' : 'hidden',
     titleBarOverlay: mac ? undefined : { color: '#000000', symbolColor: '#ffffff', height: 38 },
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
@@ -28,6 +28,13 @@ function createWindow() {
 // ---------------------------------------------------------------- IPC
 ipcMain.handle('initial-folder', () => argFolder);
 ipcMain.handle('is-dir', (_e, p) => isDir(p));
+ipcMain.handle('pick-image', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Choose a cover image for all the files', properties: ['openFile'], filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png'] }] });
+  if (r.canceled) return null;
+  const p = r.filePaths[0];
+  const ext = path.extname(p).toLowerCase() === '.png' ? 'png' : 'jpeg';
+  return { path: p, name: path.basename(p), dataUrl: `data:image/${ext};base64,` + fs.readFileSync(p).toString('base64') };
+});
 ipcMain.handle('pick-folder', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Choose your music / local files folder', properties: ['openDirectory'] });
   return r.canceled ? null : r.filePaths[0];
@@ -68,7 +75,7 @@ ipcMain.handle('open-backup', (_e, p) => { if (p && isDir(p)) shell.openPath(p);
 // ---------------------------------------------------------------- tag songs (runs ../tagger.py with Python + mutagen)
 const { spawn } = require('child_process');
 function runTagger(args) {
-  const script = path.join(__dirname, '..', 'tagger.py');
+  const script = app.isPackaged ? path.join(process.resourcesPath, 'tagger.py') : path.join(__dirname, '..', 'tagger.py');
   const tries = process.platform === 'win32' ? ['python', 'py', 'python3'] : ['python3', 'python'];
   return new Promise((resolve, reject) => {
     const attempt = (i) => {
@@ -86,9 +93,11 @@ function runTagger(args) {
     attempt(0);
   });
 }
-ipcMain.handle('tag-run', async (_e, { link, folder, apply, backup }) => {
+ipcMain.handle('tag-run', async (_e, { link, folder, apply, backup, overrides, cover }) => {
   if (!isDir(folder)) throw new Error('That folder no longer exists.');
   const args = [link, folder, '--json'];
+  if (overrides && Object.keys(overrides).length) args.push('--overrides', JSON.stringify(overrides));
+  if (cover) args.push('--cover', cover);
   if (apply) { args.push('--apply'); if (!backup) args.push('--no-backup'); }
   return runTagger(args);
 });
@@ -121,6 +130,7 @@ async function runSelfTest() {
   app.quit();
 }
 
+app.setAppUserModelId('com.localfilestoolkit.app');
 app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

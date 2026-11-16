@@ -33,7 +33,7 @@ npm install          # downloads Electron (a few hundred MB)
 npx electron .       # opens the app
 ```
 
-On Windows you can also double-click `Run Local Files Fixer (new look).bat` once `npm install` has run.
+On Windows you can also double-click `Local Files Toolkit.bat` once `npm install` has run.
 
 Command line, no window:
 
