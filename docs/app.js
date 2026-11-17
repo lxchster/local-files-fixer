@@ -11,7 +11,19 @@
   const HIGH = 8 * 1024 * 1024;     // pause when the channel has this much queued
   const WINDOW = 32 * 1024 * 1024;  // max bytes sent but not yet written by the receiver
   const ACK_EVERY = 4 * 1024 * 1024;
-  const JUNK = /^(\.DS_Store|Thumbs\.db|desktop\.ini|\._.*)$/i;
+  // Devices link directly (STUN only). PeerJS's old free relay servers no longer exist, so there is no
+  // fallback for devices on different networks. To add one, put a TURN service's details in TURN_SERVERS,
+  // e.g. [{ urls: ['turn:host:3478', 'turns:host:443?transport=tcp'], username: '...', credential: '...' }]
+  const TURN_SERVERS = [];
+  const ICE_CONFIG = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+      ...TURN_SERVERS,
+    ],
+    sdpSemantics: 'unified-plan',
+  };
+  const JUNK =/^(\.DS_Store|Thumbs\.db|desktop\.ini|\._.*)$/i;
 
   let peer = null, conn = null;
   let out = null;   // outgoing transfer state
@@ -60,7 +72,7 @@
   }
   function newPeer(id) {
     if (typeof Peer === 'undefined') { showConnError('The connection library did not load. Reload the page.'); return null; }
-    try { return id ? new Peer(id) : new Peer(); }
+    try { return id ? new Peer(id, { config: ICE_CONFIG }) : new Peer({ config: ICE_CONFIG }); }
     catch { reset(''); showConnError(RELAY_MSG); return null; }
   }
 
@@ -99,7 +111,7 @@
     p.on('open', () => {
       const c = p.connect(PREFIX + code, { serialization: 'raw', reliable: true });
       attach(c);
-      setTimeout(() => { if (conn === c && !c.open) { reset(''); showConnError('Found the other device but could not open a direct link to it. A school filter/firewall, VPN, or the two networks may be blocking device-to-device connections. Run a connection check below, or try both devices on the same Wi-Fi.'); } }, 20000);
+      setTimeout(() => { if (conn === c && !c.open) { reset(''); showConnError('Found the other device but could not open a direct link to it. The two devices are probably on different networks (e.g. home Wi-Fi vs a hotspot or mobile data), or a firewall/VPN is blocking direct links. Put BOTH devices on the same Wi-Fi and try again.'); } }, 20000);
     });
     p.on('error', (e) => {
       reset('');
@@ -364,7 +376,7 @@
     if (!res.lib) msg = 'The page did not load fully. Reload it.';
     else if (!res.relay || !res.ws) msg = 'This network or device blocks the pairing relay, so the two devices cannot find each other. It is probably a school/work filter, VPN or ad-blocker. Try turning off any VPN/ad-blocker, or use a different device or network.';
     else if (!res.stun) msg = 'Pairing works but direct links are blocked here (firewall, school network or VPN). Try the same Wi-Fi on both devices, or a different network.';
-    else msg = 'This device looks fine. If it still fails, run this check on the OTHER device too - the block may be there.';
+    else msg = 'This device looks fine. Devices on DIFFERENT networks (e.g. home Wi-Fi and a phone hotspot) often cannot link directly, so put both devices on the SAME Wi-Fi. If it still fails, run this check on the other device too.';
     add(true, msg, 'sum');
     $('#btnCheck').disabled = false;
   }
