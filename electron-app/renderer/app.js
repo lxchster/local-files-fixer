@@ -130,6 +130,7 @@
     state.lastBackup = res.backupRoot; setPhase('ready');
     await scan();           // re-check so you can see what's left
     state.fixRuns++; refreshButtons();
+    if (res.ok > 0) $('#sendOther').hidden = false; // end of the fix process: offer to send the files on
   }
 
   // ---------------------------------------------------------------- wiring
@@ -142,6 +143,7 @@
   $('#fixAll').addEventListener('click', () => fix(ticked()));
   $('#fixSel').addEventListener('click', () => fix(state.issues.filter((x) => state.selected.has(x.id))));
   $('#openBk').addEventListener('click', () => window.api.openBackup(state.lastBackup));
+  $('#sendOther').addEventListener('click', () => window.api.openTransferSite());
   $$('.chip input').forEach((i) => i.addEventListener('change', refreshButtons));
   $('#logToggle').addEventListener('click', () => { const c = $('#logCard'); const open = c.classList.toggle('open'); $('#logToggle').setAttribute('aria-expanded', open); });
 

@@ -42,8 +42,11 @@ import struct
 import subprocess
 import sys
 import threading
+import webbrowser
 
 APP_TITLE = "Local Files Fixer"
+# The "Send to other devices" page (docs/ folder of this repo, published with GitHub Pages).
+TRANSFER_SITE = "https://lxchster.github.io/local-files-fixer/"
 
 # --------------------------------------------------------------------------------------
 # Categories
@@ -936,6 +939,8 @@ def run_gui(initial_folder=None):
             self.fix_sel_btn.pack(side="left", padx=10)
             self.open_bk_btn = RoundButton(ab, "Open backup folder", self.open_backup, "secondary", state="disabled")
             self.open_bk_btn.pack(side="right")
+            # shown only once a fix has finished (see fix_done below)
+            self.send_btn = RoundButton(ab, "Send to other devices", lambda: webbrowser.open(TRANSFER_SITE), "primary")
 
             lc = card(r)
             lc.grid(row=7, column=0, sticky="ew", padx=P, pady=(6, 6))
@@ -1115,6 +1120,8 @@ def run_gui(initial_folder=None):
                     elif k == "fix_done":
                         _, ok, bad = m
                         self.write_log("Done: %d fixed, %d skipped." % (ok, bad))
+                        if ok and not self.send_btn.winfo_ismapped():
+                            self.send_btn.pack(side="right", padx=(0, 10))
                         self.busy = False
                         self.set_busy(False)
                         self.scan()  # re-check so you can see what's left

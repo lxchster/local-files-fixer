@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#000000">
+<title>Send to other devices - Local Files Toolkit</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="topo" aria-hidden="true"></canvas>
+
+<main class="page">
+  <header class="hero">
+    <span class="tag">LOCAL FILES TOOLKIT</span>
+    <h1>Send to <span class="grad">other devices</span></h1>
+    <p class="sub">Move your fixed songs between your PC, Mac and phone. Straight from device to device - nothing is uploaded to a server.</p>
+  </header>
+
+  <!-- 1. connect -->
+  <section class="card edge" id="connectCard">
+    <div class="stephead"><span class="num">1</span><h2>Connect two devices</h2></div>
+
+    <div id="chooseRole">
+      <p class="muted">Open this page on both devices. On one, choose <b>Show a code</b>. On the other, choose <b>Enter a code</b> (or just scan the QR code).</p>
+      <div class="row2">
+        <button class="btn primary" id="btnHost">Show a code</button>
+        <button class="btn ghost" id="btnJoin">Enter a code</button>
+      </div>
+    </div>
+
+    <div id="hostPanel" hidden>
+      <div class="hostgrid">
+        <div>
+          <div class="tl">Your code</div>
+          <div class="code" id="codeText" aria-live="polite">······</div>
+          <p class="muted small">On the other device open this page, choose <b>Enter a code</b> and type it in. Or scan the QR code with its camera.</p>
+          <div class="row2"><button class="btn ghost small" id="btnCopyLink">Copy link</button><button class="btn ghost small" data-cancel>Cancel</button></div>
+        </div>
+        <div class="qr" id="qrBox" aria-label="QR code"></div>
+      </div>
+    </div>
+
+    <div id="joinPanel" hidden>
+      <label class="tl" for="codeInput">Code from the other device</label>
+      <div class="row2 joinrow">
+        <input id="codeInput" class="input codeinput" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" inputmode="text">
+        <button class="btn primary" id="btnConnect">Connect</button>
+        <button class="btn ghost" data-cancel>Cancel</button>
+      </div>
+    </div>
+
+    <div class="statusline" id="connLine"><i class="dot" id="connDot"></i><span id="connText">Not connected</span><button class="btn ghost small right" id="btnDisconnect" hidden>Disconnect</button></div>
+  </section>
+
+  <!-- 2. transfer -->
+  <section class="card" id="xferCard" aria-disabled="true">
+    <div class="stephead"><span class="num">2</span><h2>Send files</h2></div>
+    <div class="drop" id="drop">
+      <b>Drop songs or a folder here</b>
+      <span class="muted">or</span>
+      <div class="row2 center">
+        <button class="btn primary" id="btnFiles" disabled>Choose files</button>
+        <button class="btn ghost" id="btnFolder" disabled>Choose folder</button>
+      </div>
+      <span class="muted small">Works both ways - whichever device you pick files on sends them to the other one.</span>
+    </div>
+    <input type="file" id="fileInput" multiple hidden>
+    <input type="file" id="folderInput" webkitdirectory multiple hidden>
+
+    <div class="panel" id="sendPanel" hidden>
+      <div class="tl">Sending</div>
+      <div class="bar"><i id="sendFill"></i></div>
+      <div class="status" id="sendStatus"></div>
+      <button class="btn ghost small" id="btnCancelSend">Cancel</button>
+    </div>
+
+    <div class="panel edge" id="offerPanel" hidden>
+      <div class="tl">Incoming</div>
+      <p id="offerText" class="offertext"></p>
+      <p class="muted small" id="saveNote"></p>
+      <div class="row2"><button class="btn primary" id="btnAccept">Accept</button><button class="btn ghost" id="btnDecline">Decline</button></div>
+    </div>
+
+    <div class="panel" id="recvPanel" hidden>
+      <div class="tl">Receiving</div>
+      <div class="bar"><i id="recvFill"></i></div>
+      <div class="status" id="recvStatus"></div>
+    </div>
+
+    <div class="panel good" id="doneBox" hidden><span id="doneText"></span></div>
+    <div class="panel warn" id="errBox" hidden><span id="errText"></span></div>
+  </section>
+
+  <!-- 3. where to put files -->
+  <section class="card" id="whereCard">
+    <div class="stephead"><span class="num">3</span><h2>Where to put the files</h2></div>
+    <p class="muted">Pick your device. Spotify only sees local files in the places below.</p>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="pc">PC</button>
+      <button class="tab" role="tab" data-tab="mac">Mac</button>
+      <button class="tab" role="tab" data-tab="phone">Phone</button>
+    </div>
+
+    <div class="tabpane" id="tab-pc" role="tabpanel" hidden>
+      <h3>Windows PC</h3>
+      <ol class="steps">
+        <li><b>Save the songs in one folder you'll keep.</b> Good choices: <code>C:\Users\&lt;you&gt;\Music</code> or <code>C:\Users\&lt;you&gt;\Downloads</code>. Spotify already looks in both. If your browser asks where to save, pick that folder.</li>
+        <li>Open Spotify and click your <b>profile picture</b> &rarr; <b>Settings</b>.</li>
+        <li>Find <b>Your Library</b> (or <b>Local files</b>) and turn on <b>Show Local Files</b>.</li>
+        <li>If your folder isn't Music or Downloads, click <b>Add a source</b> and choose it.</li>
+        <li>Your songs appear under <b>Your Library &rarr; Local Files</b>. Add them to a playlist.</li>
+      </ol>
+    </div>
+
+    <div class="tabpane" id="tab-mac" role="tabpanel" hidden>
+      <h3>Mac</h3>
+      <ol class="steps">
+        <li><b>Save the songs in one folder you'll keep.</b> Good choices: <code>~/Music</code> or <code>~/Downloads</code> (Finder &rarr; Go &rarr; Home). Spotify already looks in both.</li>
+        <li>Open Spotify and choose <b>Spotify &rarr; Settings</b> from the menu bar (or click your profile picture &rarr; Settings).</li>
+        <li>Under <b>Your Library</b> (or <b>Local files</b>) turn on <b>Show Local Files</b>.</li>
+        <li>If your folder is somewhere else, click <b>Add a source</b> and choose it. If macOS asks whether Spotify can access that folder, click <b>Allow</b>.</li>
+        <li>Your songs appear under <b>Your Library &rarr; Local Files</b>. Add them to a playlist.</li>
+      </ol>
+    </div>
+
+    <div class="tabpane" id="tab-phone" role="tabpanel" hidden>
+      <h3>Phone</h3>
+      <div class="sub2" id="phoneKind">
+        <button class="chipbtn" data-phone="android">Android</button>
+        <button class="chipbtn" data-phone="iphone">iPhone</button>
+      </div>
+      <div id="ph-android" hidden>
+        <ol class="steps">
+          <li><b>Save the songs in the phone's Music or Downloads folder.</b> When your browser downloads them they land in <code>Downloads</code>; you can move them to <code>Music</code> with the Files app.</li>
+          <li>Open Spotify &rarr; <b>Home</b> &rarr; <b>Settings</b> (gear icon) &rarr; <b>Local files</b>.</li>
+          <li>Turn on <b>Show audio files from this device</b>. Allow access to your music/files if asked.</li>
+          <li>Your songs appear under <b>Your Library &rarr; Liked Songs / Local Files</b>.</li>
+        </ol>
+      </div>
+      <div id="ph-iphone" hidden>
+        <p class="note"><b>Heads up:</b> Spotify on iPhone can't read songs saved on the phone itself. It only gets local files from a playlist on your PC or Mac.</p>
+        <ol class="steps">
+          <li>On your PC or Mac, add the local files to a <b>playlist</b> (set them up using the PC or Mac steps first).</li>
+          <li>Put the iPhone on the <b>same Wi-Fi</b> as that computer, signed in to the same Spotify account (Premium is needed to download).</li>
+          <li>On the iPhone open Spotify &rarr; <b>Settings</b> &rarr; <b>Local Files</b> and turn on <b>Show Local Files</b>.</li>
+          <li>Open the playlist and turn on <b>Download</b>. Keep both devices on and nearby until it finishes.</li>
+        </ol>
+        <p class="muted small">Sending songs to the iPhone from this page still works - they're saved to the <b>Files</b> app (Downloads). Useful as a backup, but Spotify won't play them from there.</p>
+      </div>
+    </div>
+
+    <div class="tip">
+      <b>Before you send:</b> run the songs through <b>Fix local files</b> in the toolkit first, and send the fixed copies. Spotify matches local tracks by file name and length, so every device should get the same fixed file.
+    </div>
+  </section>
+
+  <footer class="foot">Files go directly between your two devices over an encrypted connection. A public relay is only used to introduce them to each other; it never sees your songs. Keep this page open on both devices until the transfer finishes.</footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="topo.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

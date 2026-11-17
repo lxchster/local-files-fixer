@@ -71,6 +71,11 @@ ipcMain.handle('fix', async (e, { ids, backup }) => {
 
 ipcMain.handle('open-backup', (_e, p) => { if (p && isDir(p)) shell.openPath(p); });
 
+// The "Send to other devices" page (the docs/ folder of this repo, published with GitHub Pages).
+// If you host it somewhere else, change this one line.
+const TRANSFER_SITE = 'https://lxchster.github.io/local-files-fixer/';
+ipcMain.handle('open-transfer-site', () => shell.openExternal(TRANSFER_SITE));
+
 
 // ---------------------------------------------------------------- tag songs (runs ../tagger.py with Python + mutagen)
 const { spawn } = require('child_process');

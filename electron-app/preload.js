@@ -12,5 +12,6 @@ contextBridge.exposeInMainWorld('api', {
   pickImage: () => ipcRenderer.invoke('pick-image'),
   tagRun: (link, folder, apply, backup, overrides, cover) => ipcRenderer.invoke('tag-run', { link, folder, apply, backup, overrides, cover }),
   openBackup: (p) => ipcRenderer.invoke('open-backup', p),
+  openTransferSite: () => ipcRenderer.invoke('open-transfer-site'),
   on: (channel, fn) => { ipcRenderer.on(channel, (_e, data) => fn(data)); },
 });
