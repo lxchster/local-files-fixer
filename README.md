@@ -29,6 +29,8 @@ A rounded, Spotify-style window. Drag a folder onto it or use **Choose folder…
 
 **No prerequisites needed** if you have the packaged app: on Windows just double-click `Local Files Toolkit.bat` (it opens `electron-app/dist/Local Files Toolkit-win32-x64/Local Files Toolkit.exe` if present), and on macOS `Local Files Toolkit.command` (it opens `electron-app/dist/Local Files Toolkit-darwin-arm64|x64/Local Files Toolkit.app`). Nothing to install - that build already contains everything it needs.
 
+The macOS app isn't code-signed, so if you copy it to another Mac (AirDrop/zip/cloud drive) Gatekeeper may call it "damaged" - it isn't. `Local Files Toolkit.command` and `Setup.command` clear the quarantine flag that causes this before opening it; if you ever open the `.app` directly and hit that message, run `xattr -cr "path/to/Local Files Toolkit.app"` once in Terminal.
+
 A packaged build isn't included in this folder by default (it's a few hundred MB); build one yourself once Node.js is installed:
 
 ```bash

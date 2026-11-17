@@ -32,13 +32,21 @@ else
 fi
 echo
 
-if [ -d "electron-app/dist/Local Files Toolkit-darwin-arm64/Local Files Toolkit.app" ] || \
-   [ -d "electron-app/dist/Local Files Toolkit-darwin-x64/Local Files Toolkit.app" ]; then
-    echo "A ready-made app is already in electron-app/dist - nothing else to set up."
-    echo
-    echo "Setup finished. Use \"Local Files Toolkit.command\" to open the app."
-    exit 0
-fi
+echo "Checking for a ready-made app..."
+for APP in "electron-app/dist/Local Files Toolkit-darwin-arm64/Local Files Toolkit.app" \
+           "electron-app/dist/Local Files Toolkit-darwin-x64/Local Files Toolkit.app"; do
+    if [ -d "$APP" ]; then
+        # Clear the quarantine flag macOS adds when this was copied from another Mac
+        # (AirDrop/zip/cloud drive) - without this, an unsigned app like this one can show
+        # a misleading "is damaged and can't be opened" error.
+        xattr -cr "$APP" 2>/dev/null
+        echo "Found one - nothing else to set up."
+        echo
+        echo "Setup finished. Use \"Local Files Toolkit.command\" to open the app."
+        exit 0
+    fi
+done
+echo
 
 echo "Checking Node.js (only needed to run the New Look app from source)..."
 if command -v npm >/dev/null 2>&1; then

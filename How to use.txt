@@ -49,6 +49,13 @@ ON A MAC
                            Or in Terminal:  cd electron-app && npm install && npx electron .
   Classic:  python3 local_files_fixer.py
 
+  "IS DAMAGED AND CAN'T BE OPENED"? This app isn't code-signed, so copying the ready-made app
+  to another Mac (AirDrop, zip, a cloud drive) makes macOS show this - it isn't really damaged.
+  "Local Files Toolkit.command" and "Setup.command" already clear that flag automatically before
+  opening it, so this should only ever come up if you open the .app directly yourself. If it
+  does, run this once in Terminal (fixing the path if you moved the app elsewhere):
+      xattr -cr "electron-app/dist/Local Files Toolkit-darwin-arm64/Local Files Toolkit.app"
+
 TAG SONGS - NO MANUAL INSTALLS
   Tag songs needs Python 3 and a small package called "mutagen". Python already comes with
   macOS. Both apps install mutagen by themselves the first time you use Tag songs - no need to
