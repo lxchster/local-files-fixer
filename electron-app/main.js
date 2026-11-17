@@ -71,6 +71,30 @@ ipcMain.handle('fix', async (e, { ids, backup }) => {
 
 ipcMain.handle('open-backup', (_e, p) => { if (p && isDir(p)) shell.openPath(p); });
 
+// Era covers live on Google's own image host, which marks its responses
+// Cross-Origin-Resource-Policy: same-site - Chromium enforces that even though our own CSP
+// allows the origin, so an <img src="https://..."> in the renderer (a file:// page, a different
+// site entirely) silently fails to load. Fetching it here in the main process sidesteps that
+// (Node's fetch isn't subject to the renderer's cross-origin rules) and hands the renderer a
+// data: URI instead, which the CSP already allows.
+const _coverCache = new Map();
+ipcMain.handle('fetch-cover', async (_e, url) => {
+  if (!url) return null;
+  if (_coverCache.has(url)) return _coverCache.get(url);
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const buf = Buffer.from(await res.arrayBuffer());
+    const mime = buf[0] === 0x89 && buf[1] === 0x50 ? 'image/png' : buf[0] === 0xff && buf[1] === 0xd8 ? 'image/jpeg' : (res.headers.get('content-type') || 'image/jpeg');
+    const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+    _coverCache.set(url, dataUrl);
+    return dataUrl;
+  } catch {
+    _coverCache.set(url, null);
+    return null;
+  }
+});
+
 // ---------------------------------------------------------------- send files to other devices (Wi-Fi share + optional internet link)
 const share = require('./src/share');
 const tunnel = require('./src/tunnel');

@@ -9,6 +9,11 @@
   if (window.api && window.api.initialFolder) window.api.initialFolder().then((f) => { if (f) go('fix'); }).catch(() => {});
 
   let folder = null, items = [], busy = false, manual = null, trackerArtists = []; // manual = { path, name, dataUrl }
+  const coverCache = new Map(); // tracker cover url -> data: URI (or null if it failed to load)
+  function showCover(url, img) {
+    if (coverCache.has(url)) { const v = coverCache.get(url); if (v) img.src = v; else img.remove(); return; }
+    window.api.fetchCover(url).then((dataUrl) => { coverCache.set(url, dataUrl); if (dataUrl) img.src = dataUrl; else img.remove(); });
+  }
   const filled = (i) => !!(i.title || '').trim();
   const eligible = (i) => i.matched || filled(i);
   const overrides = () => {
@@ -35,7 +40,10 @@
       const row = document.createElement('div');
       row.className = 'row' + ((!it.matched && !filled(it)) || (it.matched && !it.cover && !manual) ? ' bad' : '');
       const cov = document.createElement('span'); cov.className = 'thumb';
-      if ((it.matched || filled(it)) && (manual || it.cover)) { const im = document.createElement('img'); im.src = manual ? manual.dataUrl : it.cover.replace(/=s\d+$/, '=s96'); im.alt = ''; cov.appendChild(im); }
+      if ((it.matched || filled(it)) && (manual || it.cover)) {
+        const im = document.createElement('img'); im.alt = ''; cov.appendChild(im);
+        if (manual) im.src = manual.dataUrl; else showCover(it.cover.replace(/=s\d+$/, '=s96'), im);
+      }
       row.appendChild(cov);
       const cell = (v) => { const s = document.createElement('span'); s.textContent = v; s.title = v; return s; };
       row.appendChild(cell(it.rel));

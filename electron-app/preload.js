@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   scan: (folder) => ipcRenderer.invoke('scan', folder),
   fix: (ids, backup) => ipcRenderer.invoke('fix', { ids, backup }),
   pickImage: () => ipcRenderer.invoke('pick-image'),
+  fetchCover: (url) => ipcRenderer.invoke('fetch-cover', url),
   tagRun: (link, folder, apply, backup, overrides, cover) => ipcRenderer.invoke('tag-run', { link, folder, apply, backup, overrides, cover }),
   openBackup: (p) => ipcRenderer.invoke('open-backup', p),
   pickFiles: () => ipcRenderer.invoke('pick-files'),
