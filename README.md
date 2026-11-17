@@ -42,6 +42,8 @@ Both scripts can be run from either OS (electron-packager just assembles the tar
 
 Without a packaged build, `Local Files Toolkit.bat`/`.command` fall back to running `npm install` and launching with `npx electron .` the first time - that path still needs Node.js installed.
 
+**Run `Setup.bat` (Windows) or `Setup.command` (macOS) once first** and it'll handle all of that for you: it checks for Python 3 and the `mutagen` package (installing them if missing), and only if there's no packaged build already in `electron-app/dist`, it also checks for Node.js (installing it via `winget`/Homebrew if it can) and runs `npm install`. Safe to run more than once.
+
 Command line, no window:
 
 ```bash

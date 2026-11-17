@@ -4,6 +4,10 @@ LOCAL FILES FIXER
 Finds and fixes the hidden problems in .mp3 / .m4a files that make Spotify "Local files"
 grey out, or fail to match between your PC, Mac and phone.
 
+FIRST TIME? Double-click "Setup.bat" (Windows) or "Setup.command" (Mac) once. It installs
+  whatever this needs - Python 3, the "mutagen" package, and Node.js if there's no ready-made
+  app already - and skips anything you already have. Safe to run again any time.
+
 TWO VERSIONS (they find and fix exactly the same things)
   NEW LOOK (recommended)   Double-click "Local Files Toolkit.bat" (Windows) or
                            "Local Files Toolkit.command" (Mac). If a ready-made app is sitting
