@@ -206,3 +206,14 @@ body { background: #0e0e0e; }
 #topo { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
 
 .actions .hint { color: var(--muted); font-size: 12px; }
+
+/* ---- share over Wi-Fi dialog ---- */
+.sharedlg { width: min(620px, 92vw); }
+.sharedlg p { margin: 0 0 12px; }
+.shareqr { display: flex; gap: 22px; align-items: center; margin: 4px 0 14px; }
+.qrbox { background: #fff; padding: 8px; border-radius: 14px; width: 168px; height: 168px; flex: none; line-height: 0; }
+.qrbox svg { width: 100%; height: 100%; display: block; }
+.shareinfo { min-width: 0; }
+.shareurl { margin: 6px 0 8px; padding: 10px 14px; background: var(--black); border-radius: 14px; font: 13px Consolas, "Cascadia Mono", monospace; color: #b9f5d0; word-break: break-all; user-select: text; }
+.sharedlg .hint { margin: 0 0 10px; }
+.sharedlg .mrow { flex-wrap: wrap; margin-top: 6px; }

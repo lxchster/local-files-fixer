@@ -143,7 +143,45 @@
   $('#fixAll').addEventListener('click', () => fix(ticked()));
   $('#fixSel').addEventListener('click', () => fix(state.issues.filter((x) => state.selected.has(x.id))));
   $('#openBk').addEventListener('click', () => window.api.openBackup(state.lastBackup));
-  $('#sendOther').addEventListener('click', () => window.api.openTransferSite());
+  // ---------------------------------------------------------------- share over Wi-Fi
+  const fmtBytes = (n) => n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : n < 1073741824 ? (n / 1048576).toFixed(1) + ' MB' : (n / 1073741824).toFixed(2) + ' GB';
+  const shareModal = $('#shareModal');
+  const showShare = (on) => { shareModal.classList.toggle('open', on); shareModal.setAttribute('aria-hidden', on ? 'false' : 'true'); };
+  function drawQr(url) {
+    const box = $('#shareQr'); box.replaceChildren();
+    try {
+      const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+      const svg = new DOMParser().parseFromString(qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true }), 'image/svg+xml').documentElement;
+      box.appendChild(document.importNode(svg, true));
+    } catch {}
+  }
+  function renderShare(info) {
+    $('#shareStop').hidden = !(info && info.running);
+    if (!info || !info.running) { $('#shareBody').hidden = true; $('#shareLead').textContent = 'Sharing is off.'; return; }
+    if (!info.urls.length) { $('#shareBody').hidden = true; $('#shareLead').textContent = 'No network found. Connect this computer to Wi-Fi, then try again.'; return; }
+    const name = info.folder.split(/[\\/]/).filter(Boolean).pop() || info.folder;
+    $('#shareLead').textContent = `Sharing ${info.count} file(s), ${fmtBytes(info.bytes)}, from "${name}". Open the address below on your phone or Mac and download the songs.`;
+    $('#shareUrl').textContent = info.urls[0].url;
+    drawQr(info.urls[0].url);
+    $('#shareOthers').textContent = info.urls.length > 1 ? 'If that one does not load, try: ' + info.urls.slice(1).map((u) => u.url + ' (' + u.name + ')').join('   ') : '';
+    $('#shareBody').hidden = false;
+  }
+  async function openShare() {
+    if (!state.folder) return;
+    showShare(true); $('#shareBody').hidden = true; $('#shareLead').textContent = 'Starting…'; $('#shareStatus').textContent = ''; $('#shareStop').hidden = true;
+    try { renderShare(await window.api.shareStart(state.folder)); }
+    catch (e) { $('#shareLead').textContent = 'Could not start sharing: ' + e.message; }
+  }
+  window.api.on('share-event', (ev) => {
+    if (ev.type !== 'upload') return;
+    $('#shareStatus').textContent = `Received ${ev.received} file(s) from another device. Latest: ${ev.name}.`;
+    log(`RECEIVED ${ev.name} (${fmtBytes(ev.size)}) from another device`, 'ok');
+  });
+  $('#sendOther').addEventListener('click', openShare);
+  $('#shareClose').addEventListener('click', () => showShare(false));
+  $('#shareStop').addEventListener('click', async () => { await window.api.shareStop(); renderShare({ running: false }); });
+  $('#shareSite').addEventListener('click', () => window.api.openTransferSite());
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && shareModal.classList.contains('open')) showShare(false); });
   $$('.chip input').forEach((i) => i.addEventListener('change', refreshButtons));
   $('#logToggle').addEventListener('click', () => { const c = $('#logCard'); const open = c.classList.toggle('open'); $('#logToggle').setAttribute('aria-expanded', open); });
 

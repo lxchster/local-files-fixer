@@ -119,6 +119,29 @@
     </div>
   </div>
 
+  <div id="shareModal" class="modal" aria-hidden="true">
+    <div class="dialog card edge sharedlg" role="dialog" aria-modal="true">
+      <h3>Send to other devices</h3>
+      <p id="shareLead">Starting…</p>
+      <div class="shareqr" id="shareBody" hidden>
+        <div class="qrbox" id="shareQr" aria-label="QR code"></div>
+        <div class="shareinfo">
+          <div class="tl">On your phone or Mac, scan this or type the address</div>
+          <div class="shareurl" id="shareUrl"></div>
+          <div class="hint" id="shareOthers"></div>
+        </div>
+      </div>
+      <p class="hint" id="shareStatus"></p>
+      <p class="hint">Both devices must be on the same Wi-Fi. Keep this app open while sending. If Windows asks about the firewall, click <b>Allow</b>.</p>
+      <div class="mrow">
+        <button id="shareSite" class="btn ghost">Where do the files go?</button>
+        <button id="shareStop" class="btn ghost">Stop sharing</button>
+        <button id="shareClose" class="btn primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="qrcode.min.js"></script>
   <script src="topo.js"></script>
   <script src="app.js"></script>
   <script src="tag.js"></script>
