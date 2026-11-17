@@ -7,7 +7,8 @@
   "scripts": {
     "start": "electron .",
     "scan": "node src/cli.js",
-    "package": "electron-packager . \"Local Files Toolkit\" --platform=win32 --arch=x64 --out=dist --icon=icon.ico --extra-resource=../tagger.py --overwrite --prune=true --ignore=\"^/dist\""
+    "package": "electron-packager . \"Local Files Toolkit\" --platform=win32 --arch=x64 --out=dist --icon=icon.ico --extra-resource=../tagger.py --overwrite --prune=true --ignore=\"^/dist\"",
+    "package:mac": "electron-packager . \"Local Files Toolkit\" --platform=darwin --arch=arm64,x64 --out=dist --icon=icon.icns --extra-resource=../tagger.py --overwrite --prune=true --ignore=\"^/dist\""
   },
   "license": "UNLICENSED",
   "private": true,

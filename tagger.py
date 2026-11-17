@@ -6,6 +6,8 @@ title / artist / album / cover art into the files.
 
     python tagger.py "<tracker link>" "<folder>"            # preview only
     python tagger.py "<tracker link>" "<folder>" --apply    # write tags (backs up first)
+    multiple trackers: separate links with a comma or a newline, e.g.
+        python tagger.py "<link 1>,<link 2>" "<folder>"
     add --json for machine-readable output, --no-backup to skip backups, --era "Name" to force an era
 
 Needs:  pip install mutagen
@@ -87,6 +89,22 @@ def split_people(txt):
     return out
 
 
+def _is_tracker_word(word):
+    """True for 'tracker'/'trackers' once accents and stylised Unicode letters (e.g. 'Trackër',
+    fullwidth or mathematical-alphabet letters) are folded back to plain ASCII."""
+    plain = unicodedata.normalize("NFKD", word)
+    plain = "".join(c for c in plain if not unicodedata.combining(c))
+    plain = re.sub(r"[^a-z]", "", plain.lower())
+    return plain in ("tracker", "trackers")
+
+
+def clean_artist_name(s):
+    """Drop a stray 'Tracker'/'Trackers' word (any accented or stylised spelling) some sheet
+    titles or rows carry alongside the artist."""
+    words = [w for w in (s or "").split() if not _is_tracker_word(w)]
+    return " ".join(words).strip(" -|:")
+
+
 _AKA = re.compile(
     r"(?:also\s+known\s+as|a\.?k\.?a\.?|alternately\s+(?:titled|known\s+as)|alternatively\s+(?:titled|known\s+as)"
     r"|previously\s+(?:titled|known\s+as)|originally\s+(?:titled|named|called)|(?:was\s+)?(?:also\s+)?(?:titled|named|called))"
@@ -137,7 +155,8 @@ def parse_name_cell(cell, notes=""):
         feats += split_people(fm.group(1))
     artists = []
     for a in (split_people(prefix) if prefix else ([MAIN_ARTIST] if MAIN_ARTIST else [])) + feats:
-        if a.lower() not in [x.lower() for x in artists]:
+        a = clean_artist_name(a)
+        if a and a.lower() not in [x.lower() for x in artists]:
             artists.append(a)
     if prefix and MAIN_ARTIST and MAIN_ARTIST.lower() not in [x.lower() for x in artists] and re.search(re.escape(MAIN_ARTIST), rest, re.I):
         artists.append(MAIN_ARTIST)
@@ -145,6 +164,7 @@ def parse_name_cell(cell, notes=""):
     return {
         "title": title, "base": base, "ver": ver, "artists": artists, "alts": alts,
         "key": norm(title), "key_artist": norm((prefix or "") + title),
+        "alt_keys": [norm(a) for a in alts],
     }
 
 
@@ -188,6 +208,7 @@ def parse_song_rows(rows):
         p["era"] = strip_emoji(r[c_era]).strip()
         p["len"] = parse_len(r[c_len]) if c_len is not None and len(r) > c_len else None
         p["raw"] = r[c_name].split("\n")[0]
+        p["main_artist"] = MAIN_ARTIST
         out.append(p)
     return out
 
@@ -219,7 +240,7 @@ def load_tracker(link, progress=None, all_tabs=True, artist=None):
     global MAIN_ARTIST
     sid, gid = parse_link(link)
     say = progress or (lambda s: None)
-    MAIN_ARTIST = (artist or "").strip() or sheet_artist(sid) or MAIN_ARTIST
+    MAIN_ARTIST = clean_artist_name((artist or "").strip() or sheet_artist(sid) or MAIN_ARTIST) or MAIN_ARTIST
     say("Downloading tracker rows...")
     csv_txt = _get(f"https://docs.google.com/spreadsheets/d/{sid}/gviz/tq?tqx=out:csv&gid={gid}")
     rows = list(csv.reader(io.StringIO(csv_txt)))
@@ -240,6 +261,34 @@ def load_tracker(link, progress=None, all_tabs=True, artist=None):
     covers = load_covers(sid, gid, order)
     return {"songs": songs, "covers": covers, "sid": sid, "gid": gid, "artist": MAIN_ARTIST,
             "tabs": [g for g, _ in list_tabs(sid)] if all_tabs else [gid], "scanned": {gid}}
+
+
+def split_links(s):
+    """'<link1>, <link2>\\n<link3>' -> ['<link1>', '<link2>', '<link3>']"""
+    if not isinstance(s, str):
+        return [l.strip() for l in s if l and l.strip()]
+    return [l.strip() for l in re.split(r"[\n,]+", s) if l.strip()]
+
+
+def load_trackers(links, progress=None, all_tabs=True, artist=None):
+    """Load one or more tracker links and merge them into a single tracker (songs from every
+    sheet, each still tagged with that sheet's own artist for album-artist purposes)."""
+    links = split_links(links)
+    if not links:
+        raise ValueError("No tracker link given.")
+    say = progress or (lambda s: None)
+    songs, covers, sources, artists = [], {}, [], []
+    for i, link in enumerate(links):
+        lead = f"[{i + 1}/{len(links)}] " if len(links) > 1 else ""
+        one = load_tracker(link, (lambda s, lead=lead: say(lead + s)) if progress else None, all_tabs, artist)
+        songs += one["songs"]
+        for k, v in one["covers"].items():
+            covers.setdefault(k, v)
+        sources.append({"sid": one["sid"], "gid": one["gid"], "tabs": one["tabs"], "scanned": one["scanned"]})
+        a = clean_artist_name(one["artist"])
+        if a and a not in artists:
+            artists.append(a)
+    return {"songs": songs, "covers": covers, "sources": sources, "artist": ", ".join(artists)}
 
 
 def load_covers(sid, gid, era_order=None):
@@ -334,20 +383,24 @@ def find_cover(tracker, era):
 
 
 def ensure_covers(tracker, eras):
-    """Make sure every era in `eras` has a cover; look through the other tabs' pages if needed."""
+    """Make sure every era in `eras` has a cover; look through the other tabs of each loaded
+    sheet if needed."""
     known = {era_key(e) for e in eras}
     covers = tracker["covers"]
-    for g in [tracker["gid"]] + [x for x in tracker.get("tabs", []) if x != tracker["gid"]]:
+    for src in tracker.get("sources", []):
         if known <= set(covers):
             break
-        if g in tracker["scanned"] and g != tracker["gid"]:
-            continue
-        try:
-            h = _get(f"https://docs.google.com/spreadsheets/d/{tracker['sid']}/htmlview/sheet?headers=true&gid={g}", timeout=120)
-        except Exception:
-            continue
-        tracker["scanned"].add(g)
-        scan_covers(h, known, covers)
+        for g in [src["gid"]] + [x for x in src.get("tabs", []) if x != src["gid"]]:
+            if known <= set(covers):
+                break
+            if g in src["scanned"] and g != src["gid"]:
+                continue
+            try:
+                h = _get(f"https://docs.google.com/spreadsheets/d/{src['sid']}/htmlview/sheet?headers=true&gid={g}", timeout=120)
+            except Exception:
+                continue
+            src["scanned"].add(g)
+            scan_covers(h, known, covers)
 
 
 # ------------------------------------------------------------------ matching
@@ -370,22 +423,50 @@ def audio_length(path):
         return None
 
 
+def _strip_ver(k):
+    return re.sub(r"v\d+$", "", k)
+
+
+def _overlaps(a, b, min_len=4):
+    """True if one of a/b contains the other - e.g. a file name padded with a track number or a
+    tracker title padded with '(Full Version)'. Too short to be meaningful below min_len."""
+    if not a or not b or len(a) < min_len or len(b) < min_len:
+        return a == b
+    return a in b or b in a
+
+
 def match_file(path, tracker, era_hint=None):
     info = file_stem_info(path)
     dur = audio_length(path)
     songs = tracker["songs"]
-    cands = [s for s in songs if info["key"] in (s["key"], s["key_artist"])]
+    key = info["key"]
+    cands = [s for s in songs if key in (s["key"], s["key_artist"])]
     how = "name"
+    if not cands:
+        cands = [s for s in songs if key in s.get("alt_keys", [])]
+        if cands:
+            how = "alternate name"
     if not cands:  # same name without a version number on either side
-        nov = re.sub(r"v\d+$", "", info["key"])
-        cands = [s for s in songs if nov and nov in (re.sub(r"v\d+$", "", s["key"]), re.sub(r"v\d+$", "", s["key_artist"]))]
+        nov = _strip_ver(key)
+        cands = [s for s in songs if nov and nov in (_strip_ver(s["key"]), _strip_ver(s["key_artist"]))]
         how = "name (version differs)"
+        if not cands:
+            cands = [s for s in songs if nov and any(nov == _strip_ver(k) for k in s.get("alt_keys", []))]
+            if cands:
+                how = "alternate name (version differs)"
+    if not cands:  # the song title is inside the file name, or the file name is inside the title
+        cands = [s for s in songs if _overlaps(key, s["key"]) or _overlaps(key, s["key_artist"])
+                 or any(_overlaps(key, k) for k in s.get("alt_keys", []))]
+        if cands:
+            how = "name contains / is within the tracker title"
     if not cands:
         keys = {}
         for s in songs:
             keys.setdefault(s["key"], s)
             keys.setdefault(s["key_artist"], s)
-        close = difflib.get_close_matches(info["key"], list(keys), n=3, cutoff=0.86)
+            for k in s.get("alt_keys", []):
+                keys.setdefault(k, s)
+        close = difflib.get_close_matches(key, list(keys), n=3, cutoff=0.86)
         cands = [keys[k] for k in close]
         how = "close name"
     if not cands:
@@ -399,7 +480,7 @@ def match_file(path, tracker, era_hint=None):
             sc += min(abs(dur - s["len"]), 60)
         elif s["len"] is None:
             sc += 30
-        if s["key"] != info["key"] and s["key_artist"] != info["key"]:
+        if key not in (s["key"], s["key_artist"], *s.get("alt_keys", [])):
             sc += 5
         return sc
     cands.sort(key=score)
@@ -440,6 +521,7 @@ def plan(tracker, folder, era=None):
             era_name = clean_era(song["era"])
             cov = find_cover(tracker, song["era"])
             it.update(title=song["title"], alts=song.get("alts", []), artist=", ".join(song["artists"]), album=era_name,
+                      album_artist=song.get("main_artist") or MAIN_ARTIST,
                       cover=cov["url"] if cov else None, matched=True)
         else:
             it.update(matched=False)
@@ -467,14 +549,39 @@ def fetch_cover(url):
     return _cover_cache[url]
 
 
+_mutagen_checked = False
+
+
+def _ensure_mutagen():
+    """Install the mutagen package on the fly (once per run), so nobody has to run pip by hand."""
+    global _mutagen_checked
+    if _mutagen_checked:
+        return
+    try:
+        import mutagen  # noqa: F401
+    except ImportError:
+        import subprocess
+        base = [sys.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
+        for extra in (["--user"], []):  # --user fails inside a venv; plain install fails outside one
+            try:
+                subprocess.run(base + extra + ["mutagen"], check=True, capture_output=True)
+                import importlib
+                importlib.invalidate_caches()
+                break
+            except Exception:
+                continue
+    _mutagen_checked = True
+
+
 def write_tags(item):
+    _ensure_mutagen()
     from mutagen import File
     from mutagen.id3 import ID3, ID3NoHeaderError, TIT2, TPE1, TPE2, TALB, APIC
     from mutagen.mp4 import MP4, MP4Cover
     from mutagen.wave import WAVE
     path, ext = item["path"], os.path.splitext(item["path"])[1].lower()
     cover = fetch_cover(item["cover"]) if item.get("cover") else None
-    album_artist = MAIN_ARTIST
+    album_artist = item.get("album_artist") or MAIN_ARTIST
     if ext == ".m4a":
         m = MP4(path)
         if m.tags is None:
@@ -524,10 +631,23 @@ def apply_cover(items, path):
 
 
 def apply_overrides(items, overrides):
+    """A string override renames a matched file; a {title, artist, album} override hand-tags a
+    file the tracker couldn't match (title is required, artist/album may be left blank)."""
     for it in items:
-        t = (overrides or {}).get(it["rel"])
-        if t and it.get("matched"):
-            it["title"] = t
+        o = (overrides or {}).get(it["rel"])
+        if not o:
+            continue
+        if isinstance(o, str):
+            if it.get("matched"):
+                it["title"] = o
+            continue
+        title = (o.get("title") or "").strip()
+        if not title:
+            continue
+        it["title"] = title
+        it["artist"] = (o.get("artist") or "").strip()
+        it["album"] = (o.get("album") or "").strip()
+        it["matched"] = True
 
 
 def apply(items, folder, backup=True, log=None):
@@ -571,15 +691,15 @@ def main(argv):
         args = [a for a in args if a != artist]
     else:
         artist = None
-    link, folder = args[0], args[1]
+    link_arg, folder = args[0], args[1]
     as_json = "--json" in flags
-    tr = load_tracker(link, None if as_json else (lambda s: print(s, file=sys.stderr)), artist=artist)
+    tr = load_trackers(link_arg, None if as_json else (lambda s: print(s, file=sys.stderr)), artist=artist)
     items = plan(tr, folder, era)
     if "--overrides" in argv:
         apply_overrides(items, json.loads(argv[argv.index("--overrides") + 1]))
     if "--cover" in argv:
         apply_cover(items, argv[argv.index("--cover") + 1])
-    result = {"items": items}
+    result = {"items": items, "artists": [a for a in tr["artist"].split(", ") if a]}
     if "--apply" in flags:
         result["result"] = apply(items, folder, "--no-backup" not in flags, (lambda s: None) if as_json else print)
     if as_json:

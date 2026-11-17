@@ -32,15 +32,16 @@
       <p class="sub">Matches each file to the tracker by title and length, then writes title, artist (features comma-separated), album and the era's cover.</p>
     </header>
     <section class="card edge folder tagform">
-      <input id="tLink" class="field input" type="text" placeholder="Paste the tracker link (Google Sheets)" spellcheck="false">
+      <textarea id="tLink" class="input multiline" rows="2" placeholder="Paste the tracker link (Google Sheets) - or several, one per line or comma-separated" spellcheck="false"></textarea>
       <button id="tChoose" class="btn primary">Choose folder…</button>
       <div id="tPath" class="field">No folder chosen yet</div>
       <button id="tFind" class="btn ghost" disabled>Find matches</button>
     </section>
-    <section class="progress"><div id="tStatus" class="status">Paste the link, choose the folder with the songs, then Find matches.</div></section>
+    <section class="progress"><div id="tStatus" class="status">Paste the link(s), choose the folder with the songs, then Find matches.</div></section>
     <section class="card list">
       <div class="thead tagrow"><span>Cover</span><span>File</span><span>Title</span><span>Artist</span><span>Album</span><span>Match</span></div>
       <div id="tRows" class="rows"></div>
+      <datalist id="tArtistSuggestions"></datalist>
     </section>
     <section class="actions">
       <button id="tApply" class="btn primary" disabled>Write tags</button>

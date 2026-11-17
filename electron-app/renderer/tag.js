@@ -8,11 +8,20 @@
   go(window.__lffStartFix ? 'fix' : 'menu');
   if (window.api && window.api.initialFolder) window.api.initialFolder().then((f) => { if (f) go('fix'); }).catch(() => {});
 
-  let folder = null, items = [], busy = false, manual = null; // manual = { path, name, dataUrl }
-  const overrides = () => { const o = {}; for (const i of items) if (i.matched && i.title !== i.orig) o[i.rel] = i.title; return o; };
+  let folder = null, items = [], busy = false, manual = null, trackerArtists = []; // manual = { path, name, dataUrl }
+  const filled = (i) => !!(i.title || '').trim();
+  const eligible = (i) => i.matched || filled(i);
+  const overrides = () => {
+    const o = {};
+    for (const i of items) {
+      if (i.matched) { if (i.title !== i.orig) o[i.rel] = i.title; }
+      else if (filled(i)) o[i.rel] = { title: i.title.trim(), artist: (i.artist || '').trim(), album: (i.album || '').trim() };
+    }
+    return o;
+  };
   const status = (t, tone) => { const s = $('#tStatus'); s.textContent = t; s.className = 'status' + (tone ? ' ' + tone : ''); };
   const refresh = () => {
-    const n = items.filter((i) => i.matched).length;
+    const n = items.filter(eligible).length;
     $('#tFind').disabled = busy || !folder;
     $('#tApply').disabled = busy || !n;
     $('#tApply').textContent = n ? `Write tags to ${n} files` : 'Write tags';
@@ -24,9 +33,9 @@
     const box = $('#tRows'); box.textContent = '';
     for (const it of items) {
       const row = document.createElement('div');
-      row.className = 'row' + (!it.matched || (!it.cover && !manual) ? ' bad' : '');
+      row.className = 'row' + ((!it.matched && !filled(it)) || (it.matched && !it.cover && !manual) ? ' bad' : '');
       const cov = document.createElement('span'); cov.className = 'thumb';
-      if (it.matched && (manual || it.cover)) { const im = document.createElement('img'); im.src = manual ? manual.dataUrl : it.cover.replace(/=s\d+$/, '=s96'); im.alt = ''; cov.appendChild(im); }
+      if ((it.matched || filled(it)) && (manual || it.cover)) { const im = document.createElement('img'); im.src = manual ? manual.dataUrl : it.cover.replace(/=s\d+$/, '=s96'); im.alt = ''; cov.appendChild(im); }
       row.appendChild(cov);
       const cell = (v) => { const s = document.createElement('span'); s.textContent = v; s.title = v; return s; };
       row.appendChild(cell(it.rel));
@@ -41,7 +50,27 @@
         } else row.appendChild(cell(it.title));
         row.appendChild(cell(it.artist)); row.appendChild(cell(it.album));
         const m = cell(manual ? 'Manual cover' : it.cover ? 'Matched' : 'No cover'); m.className = 'match'; row.appendChild(m);
-      } else { row.appendChild(cell('no match')); row.appendChild(cell('')); row.appendChild(cell('')); row.appendChild(cell('')); }
+      } else {
+        const mstat = cell(filled(it) ? 'Manual' : 'No match'); mstat.className = 'match';
+        const field = (key, placeholder, suggestions) => {
+          const inp = document.createElement('input');
+          inp.type = 'text'; inp.className = 'manualfield'; inp.placeholder = placeholder;
+          inp.value = it[key] || ''; inp.spellcheck = false;
+          inp.setAttribute('aria-label', placeholder + ' for ' + it.rel);
+          if (suggestions) inp.setAttribute('list', suggestions);
+          inp.addEventListener('input', () => {
+            it[key] = inp.value;
+            mstat.textContent = filled(it) ? 'Manual' : 'No match';
+            row.classList.toggle('bad', !filled(it));
+            refresh();
+          });
+          return inp;
+        };
+        row.appendChild(field('title', 'Title'));
+        row.appendChild(field('artist', 'Artist', 'tArtistSuggestions'));
+        row.appendChild(field('album', 'Album'));
+        row.appendChild(mstat);
+      }
       box.appendChild(row);
     }
   }
@@ -57,18 +86,21 @@
   $('#tLink').addEventListener('input', () => step($('#tLink').value.trim() ? (folder ? 2 : 1) : 0));
   $('#tFind').addEventListener('click', async () => {
     const link = $('#tLink').value.trim();
-    if (!link) return status('Paste the tracker link first.', 'warn');
+    if (!link) return status('Paste the tracker link(s) first.', 'warn');
     busy = true; refresh(); status('Reading the tracker and matching files…');
     try {
       const r = await window.api.tagRun(link, folder, false, true);
       items = r.items; items.forEach((i) => { i.orig = i.title; }); render(); step(3);
+      trackerArtists = r.artists || [];
+      const dl = $('#tArtistSuggestions'); dl.textContent = '';
+      for (const a of trackerArtists) { const o = document.createElement('option'); o.value = a; dl.appendChild(o); }
       const n = items.filter((i) => i.matched).length;
-      status(`${n} of ${items.length} files matched. Use the dropdown to pick a different name, then write the tags.`, 'ok');
+      status(`${n} of ${items.length} files matched. Use the dropdown to pick a different name, or fill in the unmatched rows by hand, then write the tags.`, 'ok');
     } catch (e) { items = []; render(); status(e.message, 'warn'); }
     busy = false; refresh();
   });
   $('#tApply').addEventListener('click', async () => {
-    const n = items.filter((i) => i.matched).length;
+    const n = items.filter(eligible).length;
     if (!confirm(`Write tags to ${n} file(s)?` + ($('#tBackup').checked ? '\n\nOriginals are copied to a backup folder next to yours first.' : ''))) return;
     busy = true; refresh(); status('Writing tags…');
     try {

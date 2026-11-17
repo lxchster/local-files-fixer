@@ -830,6 +830,18 @@ def run_gui(initial_folder=None):
                   indicatorbackground=[("selected", G1), ("!selected", PANEL2)],
                   indicatorforeground=[("selected", "#ffffff")], upperbordercolor=[("!selected", BORDER_HI)],
                   lowerbordercolor=[("!selected", BORDER_HI)])
+            s.configure("Dark.TCombobox", fieldbackground=PANEL2, background=PANEL2, foreground=TEXT,
+                        arrowcolor=MUTED, bordercolor=BORDER, lightcolor=PANEL2, darkcolor=PANEL2,
+                        selectbackground=PANEL2, selectforeground=TEXT, relief="flat", padding=4)
+            s.map("Dark.TCombobox", fieldbackground=[("readonly", PANEL2), ("focus", PANEL2)],
+                  bordercolor=[("focus", BORDER_HI)])
+            try:
+                s.master.option_add("*TCombobox*Listbox.background", PANEL2)
+                s.master.option_add("*TCombobox*Listbox.foreground", TEXT)
+                s.master.option_add("*TCombobox*Listbox.selectBackground", SELECT)
+                s.master.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
+            except tk.TclError:
+                pass
 
         # ---------- layout ----------
         def _build(self):
@@ -1154,6 +1166,7 @@ def run_gui(initial_folder=None):
             self.items = []
             self.folder = None
             self.busy = False
+            self.tracker_artists = []
             root.title(APP_TITLE + " - Tag songs")
             root.configure(bg=BG)
             App._style(None)
@@ -1172,11 +1185,11 @@ def run_gui(initial_folder=None):
             c1 = card(r, glow=True)
             c1.grid(row=1, column=0, sticky="ew", padx=P, pady=(10, 6))
             c1.columnconfigure(1, weight=1)
-            small_caps(c1, "Tracker link").grid(row=0, column=0, sticky="w", padx=16, pady=(14, 0))
-            self.link_var = tk.StringVar()
-            ent = tk.Entry(c1, textvariable=self.link_var, bg=PANEL2, fg=TEXT, insertbackground=TEXT, relief="flat",
-                           font=(FAM, 10), highlightthickness=1, highlightbackground=BORDER, highlightcolor=BORDER_HI)
-            ent.grid(row=0, column=1, columnspan=2, sticky="ew", padx=(8, 16), pady=(14, 0), ipady=8)
+            small_caps(c1, "Tracker link(s)").grid(row=0, column=0, sticky="nw", padx=16, pady=(16, 0))
+            self.link_box = tk.Text(c1, height=2, bg=PANEL2, fg=TEXT, insertbackground=TEXT, relief="flat",
+                                     font=(FAM, 10), highlightthickness=1, highlightbackground=BORDER,
+                                     highlightcolor=BORDER_HI, wrap="none")
+            self.link_box.grid(row=0, column=1, columnspan=2, sticky="ew", padx=(8, 16), pady=(14, 8))
             RoundButton(c1, "Choose folder…", self.choose, "primary", bg=PANEL).grid(row=1, column=0, padx=16, pady=14)
             self.path_var = tk.StringVar(value="No folder chosen yet")
             RoundBox(c1, textvariable=self.path_var, height=42, bg=PANEL, radius=16).grid(
@@ -1198,7 +1211,7 @@ def run_gui(initial_folder=None):
             self.go_btn = RoundButton(oc, "Write tags", self.apply, "primary", bg=PANEL, state="disabled")
             self.go_btn.grid(row=0, column=4, padx=16, pady=8, sticky="e")
 
-            self.status = tk.StringVar(value="Paste the tracker link, choose the folder with the songs, then Find matches.")
+            self.status = tk.StringVar(value="Paste the tracker link(s), choose the folder with the songs, then Find matches.")
             tk.Label(r, textvariable=self.status, bg=BG, fg=MUTED, font=(FAM, 10), anchor="w").grid(
                 row=3, column=0, sticky="w", padx=P, pady=(6, 0))
 
@@ -1227,7 +1240,8 @@ def run_gui(initial_folder=None):
             if not iid or self.busy:
                 return
             it = self.items[int(iid)]
-            if not it.get("matched"):
+            if not it.get("matched") or it.get("manual"):
+                self.edit_manual(iid)
                 return
             names = [it["orig_title"]] + [a for a in it.get("alts", []) if a != it["orig_title"]]
             if len(names) < 2:
@@ -1249,6 +1263,64 @@ def run_gui(initial_folder=None):
             finally:
                 menu.grab_release()
 
+        def edit_manual(self, iid):
+            """A file the tracker couldn't match: type in its title, artist and album by hand."""
+            it = self.items[int(iid)]
+            win = tk.Toplevel(self.root)
+            win.title("Tag by hand")
+            win.configure(bg=BG)
+            win.transient(self.root)
+            win.resizable(False, False)
+            P = 20
+            small_caps(win, "File").grid(row=0, column=0, sticky="w", padx=P, pady=(18, 0))
+            tk.Label(win, text=it["rel"], bg=BG, fg=MUTED, font=(FAM, 10), wraplength=360, justify="left").grid(
+                row=1, column=0, sticky="w", padx=P)
+            win.columnconfigure(0, minsize=400)
+
+            def entry_row(r, label, value):
+                small_caps(win, label).grid(row=r, column=0, sticky="w", padx=P, pady=(14, 2))
+                var = tk.StringVar(value=value)
+                e = tk.Entry(win, textvariable=var, bg=PANEL2, fg=TEXT, insertbackground=TEXT, relief="flat",
+                             font=(FAM, 10), highlightthickness=1, highlightbackground=BORDER, highlightcolor=BORDER_HI)
+                e.grid(row=r + 1, column=0, sticky="ew", padx=P, ipady=6)
+                return var
+
+            title_var = entry_row(2, "Title", it.get("title") or "")
+            small_caps(win, "Artist").grid(row=4, column=0, sticky="w", padx=P, pady=(14, 2))
+            artist_var = tk.StringVar(value=it.get("artist") or "")
+            ttk.Combobox(win, textvariable=artist_var, values=self.tracker_artists, font=(FAM, 10),
+                         style="Dark.TCombobox").grid(row=5, column=0, sticky="ew", padx=P)
+            album_var = entry_row(6, "Album", it.get("album") or "")
+
+            btns = tk.Frame(win, bg=BG)
+            btns.grid(row=8, column=0, sticky="e", padx=P, pady=18)
+
+            def save():
+                t = title_var.get().strip()
+                it["title"] = t
+                it["artist"] = artist_var.get().strip()
+                it["album"] = album_var.get().strip()
+                it["matched"] = bool(t)
+                it["manual"] = True
+                if it["matched"]:
+                    self.tree.set(iid, "title", it["title"])
+                    self.tree.set(iid, "artist", it["artist"])
+                    self.tree.set(iid, "album", it["album"])
+                    self.tree.set(iid, "cover", "manual" if self.cover_path else ("yes" if it.get("cover") else "no"))
+                    self.tree.item(iid, tags=())
+                else:
+                    self.tree.set(iid, "title", "no match")
+                    self.tree.set(iid, "artist", ""); self.tree.set(iid, "album", ""); self.tree.set(iid, "cover", "")
+                    self.tree.item(iid, tags=("bad",))
+                n = sum(1 for x in self.items if x.get("matched"))
+                self.go_btn.configure(state="normal" if n else "disabled")
+                win.destroy()
+            RoundButton(btns, "Save", save, "primary", bg=BG, height=38).pack(side="right")
+            RoundButton(btns, "Cancel", win.destroy, "secondary", bg=BG, height=38).pack(side="right", padx=(0, 10))
+            dark_titlebar(win)
+            win.update_idletasks()
+            win.geometry("+%d+%d" % (self.root.winfo_rootx() + 60, self.root.winfo_rooty() + 80))
+
         def choose(self):
             d = filedialog.askdirectory(title="Choose the folder with the songs to tag")
             if d:
@@ -1268,16 +1340,17 @@ def run_gui(initial_folder=None):
             threading.Thread(target=work, daemon=True).start()
 
         def preview(self):
-            link, folder = self.link_var.get().strip(), self.folder
+            link, folder = self.link_box.get("1.0", "end").strip(), self.folder
             if not link or not folder:
-                messagebox.showinfo(APP_TITLE, "Paste the tracker link and choose a folder first.")
+                messagebox.showinfo(APP_TITLE, "Paste the tracker link(s) and choose a folder first.")
                 return
-            self.status.set("Reading the tracker…")
+            self.status.set("Reading the tracker(s)…")
 
             def fn():
                 import tagger
-                tr = tagger.load_tracker(link, lambda m: self.q.put(("msg", m)))
-                return ("preview", tagger.plan(tr, folder))
+                tr = tagger.load_trackers(link, lambda m: self.q.put(("msg", m)))
+                artists = [a for a in (tr.get("artist") or "").split(", ") if a]
+                return ("preview", tagger.plan(tr, folder), artists)
             self._run(fn)
 
         def pick_cover(self):
@@ -1335,6 +1408,7 @@ def run_gui(initial_folder=None):
                         self.prev_btn.configure(state="normal")
                         if m[1] == "preview":
                             self.items = m[2]
+                            self.tracker_artists = m[3] if len(m) > 3 else []
                             for i in self.tree.get_children():
                                 self.tree.delete(i)
                             for idx, it in enumerate(self.items):
@@ -1345,7 +1419,7 @@ def run_gui(initial_folder=None):
                                 else:
                                     self.tree.insert("", "end", iid=str(idx), values=(it["rel"], "no match", "", "", ""), tags=("bad",))
                             n = sum(1 for it in self.items if it.get("matched"))
-                            self.status.set("%d of %d files matched. Click a file for a name dropdown, then Write tags." % (n, len(self.items)))
+                            self.status.set("%d of %d files matched. Click a file to edit its name, or to type in one by hand, then Write tags." % (n, len(self.items)))
                             self.go_btn.configure(state="normal" if n else "disabled")
                         else:
                             res = m[2]

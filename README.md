@@ -27,13 +27,20 @@ Both find and fix exactly the same things and produce byte-identical results.
 
 A rounded, Spotify-style window. Drag a folder onto it or use **Choose folder…**.
 
+**No prerequisites needed** if you have the packaged app: on Windows just double-click `Local Files Toolkit.bat` (it opens `electron-app/dist/Local Files Toolkit-win32-x64/Local Files Toolkit.exe` if present), and on macOS `Local Files Toolkit.command` (it opens `electron-app/dist/Local Files Toolkit-darwin-arm64|x64/Local Files Toolkit.app`). Nothing to install - that build already contains everything it needs.
+
+A packaged build isn't included in this folder by default (it's a few hundred MB); build one yourself once Node.js is installed:
+
 ```bash
 cd electron-app
-npm install          # downloads Electron (a few hundred MB)
-npx electron .       # opens the app
+npm install
+npm run package       # -> dist/Local Files Toolkit-win32-x64        (Windows, x64)
+npm run package:mac   # -> dist/Local Files Toolkit-darwin-arm64 and -x64 (macOS)
 ```
 
-On Windows you can also double-click `Local Files Toolkit.bat` once `npm install` has run.
+Both scripts can be run from either OS (electron-packager just assembles the target platform's pre-built Electron binary - no cross-compiling needed), so one person with Node.js can build both and hand the `dist/` folders to everyone else.
+
+Without a packaged build, `Local Files Toolkit.bat`/`.command` fall back to running `npm install` and launching with `npx electron .` the first time - that path still needs Node.js installed.
 
 Command line, no window:
 
@@ -67,9 +74,14 @@ The fixes come from debugging a real library where tracks were greyed out in pla
 
 Both apps now open on a main menu: **Fix local files** or **Tag songs**.
 
-Tag songs matches each file to a public Google-Sheets song tracker (paste the link) by title and length, then writes title (versions as `V1`, `V2`), artist (features comma-separated), album (the era) and the era cover. It shows the matches first and backs up originals before writing. Needs `pip install mutagen`.
+Tag songs matches each file to a public Google-Sheets song tracker (paste the link) by title and length, then writes title (versions as `V1`, `V2`), artist (features comma-separated), album (the era) and the era cover. A file named after one of a song's alternate names - the ones listed in their own line below the feat/prod lines, or an "also known as" in the notes - matches just as well as one named after the tracker's main title, and a file name that just has the song title inside it (extra track numbers, "(Snippet)", etc.), or that's itself inside a longer tracker title, matches too. It shows the matches first and backs up originals before writing.
+
+This needs Python 3 and the `mutagen` package - both apps install `mutagen` on the fly the first time you use Tag songs, no `pip install` needed by hand. Python 3 itself ships with macOS already; on Windows, if it's missing, the Electron app tries to install it automatically too (via `winget`), though you'll need to reopen the app once after that finishes.
+
+You can paste more than one tracker link - one per line, or comma-separated - to match a folder against several trackers (e.g. several artists, or a tracker split across sheets) in one go. Each song keeps its own tracker's artist for the album-artist tag.
 
 ```bash
 python tagger.py "<tracker link>" "D:\Music\folder"            # preview
 python tagger.py "<tracker link>" "D:\Music\folder" --apply    # write tags
+python tagger.py "<link 1>,<link 2>" "D:\Music\folder"         # multiple trackers
 ```
