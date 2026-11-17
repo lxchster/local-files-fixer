@@ -1,7 +1,7 @@
 'use strict';
 (() => {
   const $ = (s) => document.querySelector(s);
-  const views = { menu: $('#viewMenu'), fix: $('#viewFix'), tag: $('#viewTag') };
+  const views = { menu: $('#viewMenu'), fix: $('#viewFix'), tag: $('#viewTag'), send: $('#viewSend') };
   function go(name) { for (const k in views) views[k].hidden = k !== name; }
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
   window.__lffGo = go;

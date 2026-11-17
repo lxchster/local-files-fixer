@@ -29,7 +29,7 @@ function disposition(name) {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name).replace(/['()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())}`;
 }
 
-function walk(root) {
+function walk(root, prefix = '') {
   const out = [];
   const rec = (dir, rel) => {
     let items; try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -41,7 +41,7 @@ function walk(root) {
       else if (it.isFile()) { try { const st = fs.statSync(abs); out.push({ rel: r, abs, size: st.size, mtime: st.mtime }); } catch {} }
     }
   };
-  rec(root, '');
+  rec(root, prefix);
   return out;
 }
 
@@ -140,7 +140,7 @@ h1{margin:10px 0 0;font-size:clamp(30px,8vw,46px);line-height:1.05;letter-spacin
 #upStatus{font-size:13px;color:var(--muted);word-break:break-all}a.link{color:#5fe596}
 </style></head><body><main>
 <header><span class="tag">LOCAL FILES TOOLKIT</span><h1>Send to <span class="grad">this device</span></h1>
-<p class="muted">Songs from <b>${esc(path.basename(s.folder))}</b> on your computer. Tap a folder's .zip, or open it and tap single files.</p></header>
+<p class="muted">Songs from <b>${esc(s.label)}</b> on your computer. Tap a folder's .zip, or open it and tap single files.</p></header>
 ${groupsHtml || '<section class="card">No files found in the shared folder.</section>'}
 <section class="card edge"><b>Send files to the computer</b><p class="muted">Pick files on this device. They are saved on the computer in a folder called <b>${esc(path.basename(s.recvDir))}</b>.</p>
 <input id="pick" type="file" multiple hidden><button class="btn ghost" id="go">Choose files</button>
@@ -183,7 +183,7 @@ function handleUpload(req, res, name) {
 function handle(req, res) {
   if (!state) return send(res, 503, 'Sharing has stopped');
   const host = String(req.headers.host || '').replace(/:\d+$/, '');
-  if (!/^(\d{1,3}(\.\d{1,3}){3}|localhost)$/.test(host)) return send(res, 403, 'Forbidden');
+  if (!/^(\d{1,3}(\.\d{1,3}){3}|localhost)$/.test(host) && !(state.publicHost && host === state.publicHost)) return send(res, 403, 'Forbidden');
   let u, parts;
   try { u = new URL(req.url, 'http://x'); parts = u.pathname.split('/').filter(Boolean).map(decodeURIComponent); } catch { return send(res, 400, 'Bad request'); }
   if (parts[0] !== state.token) return send(res, 404, 'Not found');
@@ -228,7 +228,7 @@ function handle(req, res) {
 function buildGroups(files) {
   const map = new Map();
   files.forEach((f, i) => {
-    const k = f.rel.includes('/') ? f.rel.split('/')[0] : 'Files in this folder';
+    const k = f.rel.includes('/') ? f.rel.split('/')[0] : 'Loose files';
     if (!map.has(k)) map.set(k, { name: k, idx: [], size: 0 });
     const g = map.get(k); g.idx.push(i); g.size += f.size;
   });
@@ -238,15 +238,34 @@ function buildGroups(files) {
 function info() {
   if (!state) return { running: false };
   const urls = lanAddresses().map((a) => ({ name: a.name, url: `http://${a.address}:${state.port}/${state.token}/` }));
-  return { running: true, folder: state.folder, urls, count: state.files.length, bytes: state.files.reduce((a, f) => a + f.size, 0), recvDir: state.recvDir, received: state.received };
+  return { running: true, label: state.label, urls, port: state.port, token: state.token, publicHost: state.publicHost || null,
+    count: state.files.length, bytes: state.files.reduce((a, f) => a + f.size, 0), recvDir: state.recvDir, received: state.received };
 }
 
-async function start(folder, onEvent) {
-  if (state && state.folder === folder) { state.onEvent = onEvent; return info(); }
+function setPublicHost(h) { if (state) state.publicHost = h || null; }
+
+// paths: one or more folders and/or files to share.
+async function start(paths, opts = {}) {
+  const list = (Array.isArray(paths) ? paths : [paths]).filter(Boolean);
+  if (!list.length) throw new Error('Choose a folder or some files first.');
+  const key = list.join('|');
+  if (state && state.key === key) { state.onEvent = opts.onEvent; return info(); }
   await stop();
-  const files = walk(folder);
-  const s = { folder, files, groups: buildGroups(files), token: crypto.randomBytes(9).toString('base64url'), received: 0, onEvent,
-    recvDir: path.join(path.dirname(folder), path.basename(folder) + ' - received'), server: null, port: 0 };
+  const files = []; let label;
+  const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+  if (list.length === 1 && isDir(list[0])) {
+    files.push(...walk(list[0])); label = path.basename(list[0]) || list[0];
+  } else {
+    for (const p of list) {
+      let st; try { st = fs.statSync(p); } catch { continue; }
+      if (st.isDirectory()) files.push(...walk(p, path.basename(p)));
+      else if (st.isFile() && !JUNK.test(path.basename(p))) files.push({ rel: path.basename(p), abs: p, size: st.size, mtime: st.mtime });
+    }
+    label = list.length + ' selected item' + (list.length === 1 ? '' : 's');
+  }
+  if (!files.length) throw new Error('There are no files to share in that selection.');
+  const s = { key, label, files, groups: buildGroups(files), token: crypto.randomBytes(9).toString('base64url'), received: 0, onEvent: opts.onEvent,
+    publicHost: null, recvDir: opts.recvDir || path.join(os.homedir(), 'Downloads', 'Local Files Toolkit - received'), server: null, port: 0 };
   s.server = http.createServer(handle);
   s.server.on('clientError', (_e, sock) => { try { sock.destroy(); } catch {} });
   await new Promise((resolve, reject) => {
@@ -268,4 +287,4 @@ async function stop() {
   if (s && s.server) await new Promise((r) => { s.server.close(() => r()); if (s.server.closeAllConnections) s.server.closeAllConnections(); });
 }
 
-module.exports = { start, stop, status: info, lanAddresses };
+module.exports = { start, stop, status: info, setPublicHost, lanAddresses };

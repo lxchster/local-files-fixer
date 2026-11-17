@@ -71,21 +71,42 @@ ipcMain.handle('fix', async (e, { ids, backup }) => {
 
 ipcMain.handle('open-backup', (_e, p) => { if (p && isDir(p)) shell.openPath(p); });
 
-// The "Send to other devices" page (the docs/ folder of this repo, published with GitHub Pages).
-// If you host it somewhere else, change this one line.
-const TRANSFER_SITE = 'https://lxchster.github.io/local-files-fixer/';
-ipcMain.handle('open-transfer-site', () => shell.openExternal(TRANSFER_SITE + '#whereCard'));
-
-// ---------------------------------------------------------------- share over Wi-Fi (phone / Mac download from this computer)
+// ---------------------------------------------------------------- send files to other devices (Wi-Fi share + optional internet link)
 const share = require('./src/share');
-ipcMain.handle('share-start', async (e, folder) => {
-  if (!isDir(folder)) throw new Error('That folder no longer exists.');
-  return share.start(folder, (ev) => { try { e.sender.send('share-event', ev); } catch {} });
+const tunnel = require('./src/tunnel');
+const toolsDir = () => path.join(app.getPath('userData'), 'tools');
+const recvDir = () => path.join(app.getPath('downloads'), 'Local Files Toolkit - received');
+
+ipcMain.handle('pick-files', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Choose files to send', properties: ['openFile', 'multiSelections'] });
+  return r.canceled ? [] : r.filePaths;
 });
-ipcMain.handle('share-stop', () => share.stop());
+ipcMain.handle('share-start', async (e, paths) => {
+  const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && fs.existsSync(p));
+  if (!list.length) throw new Error('Those files or folders no longer exist.');
+  const before = share.status().token;
+  const info = await share.start(list, { recvDir: recvDir(), onEvent: (ev) => { try { e.sender.send('share-event', ev); } catch {} } });
+  if (before && before !== info.token) tunnel.stop(); // a new share has a new secret, so the old internet link is dead
+  return info;
+});
+ipcMain.handle('share-stop', async () => { tunnel.stop(); await share.stop(); });
 ipcMain.handle('share-status', () => share.status());
-ipcMain.handle('open-path', (_e, p) => { if (p && isDir(p)) shell.openPath(p); });
-app.on('before-quit', () => { share.stop(); });
+ipcMain.handle('open-received', () => { const d = recvDir(); fs.mkdirSync(d, { recursive: true }); return shell.openPath(d); });
+
+ipcMain.handle('tunnel-info', () => {
+  const a = tunnel.asset();
+  return { supported: !!a, installed: tunnel.installed(toolsDir()), mb: a ? a.mb : 0, url: tunnel.current() };
+});
+ipcMain.handle('tunnel-start', async (e) => {
+  const st = share.status();
+  if (!st.running) throw new Error('Start sharing first.');
+  if (!tunnel.installed(toolsDir())) await tunnel.download(toolsDir(), (done, total) => { try { e.sender.send('tunnel-progress', { done, total }); } catch {} });
+  const host = await tunnel.start(toolsDir(), st.port, () => { share.setPublicHost(null); try { e.sender.send('tunnel-ended'); } catch {} });
+  share.setPublicHost(host);
+  return { url: `https://${host}/${st.token}/` };
+});
+ipcMain.handle('tunnel-stop', () => { tunnel.stop(); share.setPublicHost(null); });
+app.on('before-quit', () => { tunnel.stop(); share.stop(); });
 
 
 // ---------------------------------------------------------------- tag songs (runs ../tagger.py with Python + mutagen)

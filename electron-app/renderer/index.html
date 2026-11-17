@@ -21,6 +21,7 @@
       <div class="menucards">
         <button class="card edge mcard" data-go="fix"><span class="micon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3be67f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg></span><b>Fix local files</b><span>Repair hidden MP3 / M4A problems that make Spotify local files grey out or mismatch.</span><i class="btn primary">Open</i></button>
         <button class="card edge mcard" data-go="tag"><span class="micon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3be67f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg></span><b>Tag songs</b><span>Match files to an artist's song tracker and add title, artist, album and cover art.</span><i class="btn primary">Open</i></button>
+        <button class="card edge mcard" data-go="send"><span class="micon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3be67f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg></span><b>Send files</b><span>Send songs to your phone or Mac over Wi-Fi or the internet, with steps for where they go.</span><i class="btn primary">Open</i></button>
       </div>
     </div>
   </main>
@@ -108,6 +109,110 @@
     </section>
   </main>
 
+  <main class="wrap" id="viewSend" hidden>
+    <header class="hero">
+      <button class="btn ghost back first" data-go="menu">&larr; Menu</button>
+      <h1>Send to <span class="grad">other devices</span></h1>
+      <p class="sub">Pick the songs, start sharing, then open the link on your phone or Mac to download them. You can also send files back to this computer.</p>
+    </header>
+
+    <section class="card edge folder">
+      <button id="sFolder" class="btn primary">Choose folder&hellip;</button>
+      <button id="sFiles" class="btn ghost">Choose files&hellip;</button>
+      <div id="sPath" class="field">Nothing chosen yet</div>
+      <button id="sStart" class="btn primary" disabled>Start sharing</button>
+    </section>
+    <p id="sMsg" class="status"></p>
+
+    <section class="card edge sharebox" id="sShare" hidden>
+      <div class="shareqr">
+        <div class="qrbox" id="sQr" aria-label="QR code"></div>
+        <div class="shareinfo">
+          <div class="tl">On your phone or Mac (same Wi-Fi), scan this or type the address</div>
+          <div class="shareurl" id="sUrl"></div>
+          <div class="hint" id="sOthers"></div>
+          <div class="hint" id="sInfo"></div>
+        </div>
+      </div>
+      <div class="hint" id="sStatus"></div>
+
+      <div class="netrow" id="sNet" hidden>
+        <div><b>Devices on different Wi-Fi networks?</b><div class="hint" id="sNetText"></div></div>
+        <button id="sNetBtn" class="btn ghost">Make an internet link</button>
+      </div>
+      <div class="shareqr" id="sNetBody" hidden>
+        <div class="qrbox" id="sNetQr" aria-label="QR code"></div>
+        <div class="shareinfo">
+          <div class="tl">Internet link - works from any network</div>
+          <div class="shareurl" id="sNetUrl"></div>
+          <div class="hint">Anyone with this link can download these files until you stop sharing. Sending files back over the internet is limited to about 100 MB per file.</div>
+        </div>
+      </div>
+
+      <div class="rowbtns">
+        <button id="sOpenRecv" class="btn ghost">Open received files</button>
+        <button id="sStop" class="btn ghost">Stop sharing</button>
+      </div>
+      <p class="hint">Keep this app open while sending. If Windows asks about the firewall, click <b>Allow</b> (tick both Private and Public if you are using the PC's hotspot).</p>
+    </section>
+
+    <section class="card how" id="sHow">
+      <div class="tl">Where do the files go?</div>
+      <p class="hint" style="margin:6px 0 0">Pick the device you downloaded them to. Spotify only sees local files in the places below.</p>
+      <div class="howtabs" role="tablist">
+        <button class="howtab" data-how="pc">PC</button>
+        <button class="howtab" data-how="mac">Mac</button>
+        <button class="howtab" data-how="phone">Phone</button>
+      </div>
+
+      <div class="howpane" id="how-pc" hidden>
+        <b>Windows PC</b>
+        <ol>
+          <li><b>Keep the songs in one folder you won't move.</b> Good choices: <code>C:\Users\&lt;you&gt;\Music</code> or <code>C:\Users\&lt;you&gt;\Downloads</code>. Spotify already looks in both.</li>
+          <li>Open Spotify, click your <b>profile picture</b> &rarr; <b>Settings</b>.</li>
+          <li>Under <b>Your Library</b> (or <b>Local files</b>) turn on <b>Show Local Files</b>.</li>
+          <li>If your folder isn't Music or Downloads, click <b>Add a source</b> and choose it.</li>
+          <li>The songs appear under <b>Your Library &rarr; Local Files</b>. Add them to a playlist.</li>
+        </ol>
+      </div>
+
+      <div class="howpane" id="how-mac" hidden>
+        <b>Mac</b>
+        <ol>
+          <li><b>Keep the songs in one folder you won't move.</b> Good choices: <code>~/Music</code> or <code>~/Downloads</code> (Finder &rarr; Go &rarr; Home). Spotify already looks in both.</li>
+          <li>Open Spotify and choose <b>Spotify &rarr; Settings</b> from the menu bar.</li>
+          <li>Under <b>Your Library</b> (or <b>Local files</b>) turn on <b>Show Local Files</b>.</li>
+          <li>If your folder is somewhere else, click <b>Add a source</b> and choose it. If macOS asks whether Spotify can access it, click <b>Allow</b>.</li>
+          <li>The songs appear under <b>Your Library &rarr; Local Files</b>. Add them to a playlist.</li>
+        </ol>
+      </div>
+
+      <div class="howpane" id="how-phone" hidden>
+        <b>Phone</b>
+        <div class="howsub"><button class="howtab small" data-ph="android">Android</button><button class="howtab small" data-ph="iphone">iPhone</button></div>
+        <div id="ph-android" hidden>
+          <ol>
+            <li><b>Put the songs in the phone's Music or Downloads folder.</b> Downloads from your browser land in <code>Downloads</code>; move them to <code>Music</code> with the Files app if you like.</li>
+            <li>Open Spotify &rarr; <b>Home</b> &rarr; <b>Settings</b> (gear icon) &rarr; <b>Local files</b>.</li>
+            <li>Turn on <b>Show audio files from this device</b>, and allow access to your music/files if asked.</li>
+            <li>The songs appear under <b>Your Library</b> as local files.</li>
+          </ol>
+        </div>
+        <div id="ph-iphone" hidden>
+          <p class="hownote"><b>Heads up:</b> Spotify on iPhone can't read songs saved on the phone itself. It only gets local files from a playlist on your PC or Mac.</p>
+          <ol>
+            <li>On your PC or Mac, add the local files to a <b>playlist</b> (use the PC or Mac steps first).</li>
+            <li>Put the iPhone on the <b>same Wi-Fi</b> as that computer, signed in to the same Spotify account (Premium is needed to download).</li>
+            <li>On the iPhone open Spotify &rarr; <b>Settings</b> &rarr; <b>Local Files</b> and turn on <b>Show Local Files</b>.</li>
+            <li>Open the playlist and turn on <b>Download</b>. Keep both devices on and nearby until it finishes.</li>
+          </ol>
+          <p class="hint">Songs you download to the iPhone from this page are saved in the <b>Files</b> app, which is handy as a backup, but Spotify won't play them from there.</p>
+        </div>
+      </div>
+      <p class="hint" style="margin:10px 0 0"><b>Tip:</b> run the songs through <b>Fix local files</b> before you send them, so every device gets the same fixed file.</p>
+    </section>
+  </main>
+
   <div id="modal" class="modal" aria-hidden="true">
     <div class="dialog card edge" role="dialog" aria-modal="true">
       <h3 id="mTitle">Fix items?</h3>
@@ -119,31 +224,10 @@
     </div>
   </div>
 
-  <div id="shareModal" class="modal" aria-hidden="true">
-    <div class="dialog card edge sharedlg" role="dialog" aria-modal="true">
-      <h3>Send to other devices</h3>
-      <p id="shareLead">Starting…</p>
-      <div class="shareqr" id="shareBody" hidden>
-        <div class="qrbox" id="shareQr" aria-label="QR code"></div>
-        <div class="shareinfo">
-          <div class="tl">On your phone or Mac, scan this or type the address</div>
-          <div class="shareurl" id="shareUrl"></div>
-          <div class="hint" id="shareOthers"></div>
-        </div>
-      </div>
-      <p class="hint" id="shareStatus"></p>
-      <p class="hint">Both devices must be on the same Wi-Fi. Keep this app open while sending. If Windows asks about the firewall, click <b>Allow</b>.</p>
-      <div class="mrow">
-        <button id="shareSite" class="btn ghost">Where do the files go?</button>
-        <button id="shareStop" class="btn ghost">Stop sharing</button>
-        <button id="shareClose" class="btn primary">Done</button>
-      </div>
-    </div>
-  </div>
-
   <script src="qrcode.min.js"></script>
   <script src="topo.js"></script>
   <script src="app.js"></script>
   <script src="tag.js"></script>
+  <script src="send.js"></script>
 </body>
 </html>

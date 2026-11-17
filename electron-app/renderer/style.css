@@ -217,3 +217,28 @@ body { background: #0e0e0e; }
 .shareurl { margin: 6px 0 8px; padding: 10px 14px; background: var(--black); border-radius: 14px; font: 13px Consolas, "Cascadia Mono", monospace; color: #b9f5d0; word-break: break-all; user-select: text; }
 .sharedlg .hint { margin: 0 0 10px; }
 .sharedlg .mrow { flex-wrap: wrap; margin-top: 6px; }
+
+/* ---- Send files screen ---- */
+.menucards { flex-wrap: wrap; }
+.mcard { width: 350px; }
+#viewSend { overflow-y: auto; }
+#viewSend > * { flex: none; }
+#viewSend::-webkit-scrollbar { width: 10px; } #viewSend::-webkit-scrollbar-track { background: transparent; }
+#viewSend::-webkit-scrollbar-thumb { background: rgba(30, 215, 96, .32); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+.sharebox { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.sharebox .hint, .how .hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+.netrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; background: var(--black); border-radius: 16px; }
+.rowbtns { display: flex; gap: 10px; flex-wrap: wrap; }
+.how { padding: 18px 22px 16px; }
+.howtabs { display: flex; gap: 8px; margin: 12px 0 10px; }
+.howtab { border: 1px solid #2a2a2a; background: var(--black); color: var(--muted); border-radius: 999px; padding: 8px 18px; font-weight: 700; font-size: 13px; font-family: inherit; cursor: pointer; transition: all .18s; }
+.howtab:hover { border-color: var(--line-hi); color: var(--text); }
+.howtab.on { background: var(--grad); color: #03140a; border-color: transparent; }
+.howtab.small { padding: 5px 14px; font-size: 12px; }
+.howsub { display: flex; gap: 8px; margin: 8px 0; }
+.howpane { background: var(--black); border-radius: 16px; padding: 14px 18px 8px; }
+.howpane ol { margin: 8px 0 6px; padding: 0; list-style: none; counter-reset: s; }
+.howpane li { counter-increment: s; position: relative; padding: 7px 0 7px 36px; }
+.howpane li::before { content: counter(s); position: absolute; left: 0; top: 7px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line-hi); color: #b9f5d0; font-weight: 700; font-size: 12px; display: grid; place-items: center; }
+.howpane code { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 8px; padding: 1px 7px; font: 12.5px Consolas, "Cascadia Mono", monospace; color: #cfe9d9; user-select: text; }
+.hownote { background: rgba(251, 191, 36, .09); border: 1px solid rgba(251, 191, 36, .3); color: #f4dc9a; border-radius: 14px; padding: 9px 14px; margin: 8px 0; font-size: 13px; }
