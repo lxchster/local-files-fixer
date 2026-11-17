@@ -111,7 +111,6 @@
     p.on('open', () => {
       const c = p.connect(PREFIX + code, { serialization: 'raw', reliable: true });
       attach(c);
-      setTimeout(() => { if (conn === c && !c.open) { reset(''); showConnError('Found the other device but could not open a direct link to it. The two devices are probably on different networks (e.g. home Wi-Fi vs a hotspot or mobile data), or a firewall/VPN is blocking direct links. Put BOTH devices on the same Wi-Fi and try again.'); } }, 20000);
     });
     p.on('error', (e) => {
       reset('');
@@ -119,8 +118,39 @@
     });
   }
 
+  // What happened during the link attempt (shown if it fails, so the cause can be seen).
+  let dbg = { state: [], local: {} };
+  function watchIce(c) {
+    dbg = { state: [], local: {} };
+    const pc = c.peerConnection; if (!pc) return;
+    pc.addEventListener('icecandidate', (e) => {
+      if (!e.candidate) return;
+      const s = e.candidate.candidate, t = (/ typ (\w+)/.exec(s) || [])[1] || '?';
+      const k = t + (/\.local /.test(s) ? ' (hidden .local)' : '');
+      dbg.local[k] = (dbg.local[k] || 0) + 1;
+    });
+    pc.addEventListener('iceconnectionstatechange', () => dbg.state.push(pc.iceConnectionState));
+  }
+  async function dbgSummary(c) {
+    const pc = c && c.peerConnection; if (!pc) return 'no connection object';
+    const remote = {}, pairs = {};
+    try {
+      (await pc.getStats()).forEach((r) => {
+        if (r.type === 'remote-candidate') { const k = r.candidateType + (String(r.address || r.ip || '').endsWith('.local') ? ' (hidden .local)' : ''); remote[k] = (remote[k] || 0) + 1; }
+        if (r.type === 'candidate-pair') pairs[r.state] = (pairs[r.state] || 0) + 1;
+      });
+    } catch {}
+    const j = (o) => Object.entries(o).map(([k, v]) => k + ' x' + v).join(', ') || 'none';
+    return 'Link steps: ' + (dbg.state.join(' > ') || 'none') + '\nThis device offered: ' + j(dbg.local) + '\nOther device offered: ' + j(remote) + '\nTried: ' + j(pairs);
+  }
+
   function attach(c) {
-    conn = c;
+    conn = c; watchIce(c);
+    setTimeout(async () => {
+      if (conn !== c || c.open) return;
+      const info = await dbgSummary(c);
+      reset(''); showConnError('Found the other device but could not open a direct link to it.\n\n' + info);
+    }, 30000);
     c.on('open', () => {
       showRole('choose'); $('#chooseRole').hidden = true; $('#hostPanel').hidden = true; $('#joinPanel').hidden = true;
       showConnError(''); setConn('on', 'Connected - ready to send and receive');
@@ -372,10 +402,24 @@
     }), timeout(7000).then(() => false)]);
     add(res.stun, res.stun ? 'Direct device-to-device link possible on this network' : 'Direct device-to-device link blocked on this network');
 
+    if (TURN_SERVERS.length) {
+      res.turn = await Promise.race([new Promise((resolve) => {
+        try {
+          const pc = new RTCPeerConnection({ iceServers: TURN_SERVERS, iceTransportPolicy: 'relay' });
+          pc.createDataChannel('x');
+          pc.onicecandidate = (e) => { if (e.candidate && /typ relay/.test(e.candidate.candidate)) { pc.close(); resolve(true); } };
+          pc.createOffer().then((o) => pc.setLocalDescription(o)).catch(() => resolve(false));
+        } catch { resolve(false); }
+      }), timeout(10000).then(() => false)]);
+      add(res.turn, res.turn ? 'Relay server reachable (devices can connect even when direct links are blocked)' : 'Relay server NOT reachable from this device');
+    }
+
     let msg;
     if (!res.lib) msg = 'The page did not load fully. Reload it.';
     else if (!res.relay || !res.ws) msg = 'This network or device blocks the pairing relay, so the two devices cannot find each other. It is probably a school/work filter, VPN or ad-blocker. Try turning off any VPN/ad-blocker, or use a different device or network.';
     else if (!res.stun) msg = 'Pairing works but direct links are blocked here (firewall, school network or VPN). Try the same Wi-Fi on both devices, or a different network.';
+    else if (TURN_SERVERS.length && !res.turn) msg = 'Pairing works, but this device cannot reach the relay server either, so it cannot connect when direct links are blocked. A school/work filter is the likely cause.';
+    else if (TURN_SERVERS.length) msg = 'This device looks fine, including the relay. If it still fails, run this check on the other device too.';
     else msg = 'This device looks fine. Devices on DIFFERENT networks (e.g. home Wi-Fi and a phone hotspot) often cannot link directly, so put both devices on the SAME Wi-Fi. If it still fails, run this check on the other device too.';
     add(true, msg, 'sum');
     $('#btnCheck').disabled = false;
