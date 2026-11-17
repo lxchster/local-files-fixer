@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://0.peerjs.com wss://0.peerjs.com; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#000000">
 <title>Send to other devices - Local Files Toolkit</title>
 <link rel="stylesheet" href="style.css">
@@ -52,6 +52,9 @@
     </div>
 
     <div class="statusline" id="connLine"><i class="dot" id="connDot"></i><span id="connText">Not connected</span><button class="btn ghost small right" id="btnDisconnect" hidden>Disconnect</button></div>
+    <div class="panel warn" id="connErr" hidden><span id="connErrText"></span></div>
+    <div class="trouble"><button class="btn ghost small" id="btnCheck">Can't connect? Run a connection check</button></div>
+    <div class="panel" id="checkOut" hidden></div>
   </section>
 
   <!-- 2. transfer -->
@@ -159,8 +162,8 @@
   <footer class="foot">Files go directly between your two devices over an encrypted connection. A public relay is only used to introduce them to each other; it never sees your songs. Keep this page open on both devices until the transfer finishes.</footer>
 </main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="peerjs.min.js"></script>
+<script src="qrcode.min.js"></script>
 <script src="topo.js"></script>
 <script src="app.js"></script>
 </body>

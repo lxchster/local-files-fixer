@@ -34,6 +34,8 @@
     $('#btnFiles').disabled = $('#btnFolder').disabled = !on;
   }
   function showError(msg) { $('#errText').textContent = msg; $('#errBox').hidden = !msg; }
+  function showConnError(msg) { $('#connErrText').textContent = msg; $('#connErr').hidden = !msg; }
+  const RELAY_MSG = 'Could not reach the pairing relay (0.peerjs.com). A school or work filter, VPN or ad-blocker may be blocking it. Tap "Run a connection check" below to see.';
   function showDone(msg) { $('#doneText').textContent = msg; $('#doneBox').hidden = !msg; }
   function showRole(r) { // 'choose' | 'host' | 'join'
     $('#chooseRole').hidden = r !== 'choose';
@@ -57,16 +59,17 @@
     teardown(); showRole('choose'); setConn('', msg || 'Not connected');
   }
   function newPeer(id) {
-    if (typeof Peer === 'undefined') { showError('Could not load the connection library. Check your internet connection and reload.'); return null; }
-    const p = id ? new Peer(id) : new Peer();
-    return p;
+    if (typeof Peer === 'undefined') { showConnError('The connection library did not load. Reload the page.'); return null; }
+    try { return id ? new Peer(id) : new Peer(); }
+    catch { reset(''); showConnError(RELAY_MSG); return null; }
   }
 
   function host() {
-    teardown(); showError(''); showDone('');
+    teardown(); showError(''); showDone(''); showConnError('');
     const code = randomCode();
     const p = newPeer(PREFIX + code); if (!p) return;
     peer = p; showRole('host'); $('#codeText').textContent = '······'; setConn('wait', 'Getting a code…');
+    setTimeout(() => { if (peer === p && !p.open) { reset(''); showConnError(RELAY_MSG); } }, 12000);
     p.on('open', () => {
       $('#codeText').textContent = code;
       const link = location.origin + location.pathname + '#join=' + code;
@@ -81,25 +84,26 @@
     p.on('connection', (c) => { if (conn) { c.close(); return; } attach(c); });
     p.on('error', (e) => {
       if (e.type === 'unavailable-id') return host();
-      reset(''); showError('Connection problem (' + e.type + '). Try again.');
+      reset(''); showConnError(/network|server|socket/.test(e.type) ? RELAY_MSG : 'Connection problem (' + e.type + '). Try again.');
     });
     p.on('disconnected', () => { try { p.reconnect(); } catch {} });
   }
 
   function join(raw) {
     const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (code.length < 6) { showError('Enter the 6-character code shown on the other device.'); return; }
-    teardown(); showError(''); showDone('');
+    if (code.length < 6) { showConnError('Enter the 6-character code shown on the other device.'); return; }
+    teardown(); showError(''); showDone(''); showConnError('');
     const p = newPeer(); if (!p) return;
     peer = p; setConn('wait', 'Connecting…');
+    setTimeout(() => { if (peer === p && !p.open) { reset(''); showConnError(RELAY_MSG); } }, 12000);
     p.on('open', () => {
       const c = p.connect(PREFIX + code, { serialization: 'raw', reliable: true });
       attach(c);
-      setTimeout(() => { if (conn === c && !c.open) { reset(''); showError('Could not reach that device. Check the code and that the other device is still showing it.'); } }, 20000);
+      setTimeout(() => { if (conn === c && !c.open) { reset(''); showConnError('Found the other device but could not open a direct link to it. A school filter/firewall, VPN, or the two networks may be blocking device-to-device connections. Run a connection check below, or try both devices on the same Wi-Fi.'); } }, 20000);
     });
     p.on('error', (e) => {
       reset('');
-      showError(e.type === 'peer-unavailable' ? 'No device is showing that code. Check it and try again.' : 'Connection problem (' + e.type + '). Try again.');
+      showConnError(e.type === 'peer-unavailable' ? 'No device is showing that code. Check it, and make sure the other device is still on the "Show a code" screen.' : /network|server|socket/.test(e.type) ? RELAY_MSG : 'Connection problem (' + e.type + '). Try again.');
     });
   }
 
@@ -107,7 +111,7 @@
     conn = c;
     c.on('open', () => {
       showRole('choose'); $('#chooseRole').hidden = true; $('#hostPanel').hidden = true; $('#joinPanel').hidden = true;
-      setConn('on', 'Connected - ready to send and receive');
+      showConnError(''); setConn('on', 'Connected - ready to send and receive');
       if (peer) { try { peer.disconnect(); } catch {} } // the relay is no longer needed
     });
     c.on('data', onData);
@@ -322,7 +326,51 @@
     $('#recvStatus').textContent = `File ${me.fileNo} of ${me.count} - ${fmt(me.written)} of ${fmt(me.total)}` + (me.cur ? ` - ${me.cur.path}` : '');
   }
 
+  // ---------------------------------------------------------------- connection check
+  async function runCheck() {
+    const box = $('#checkOut'); box.hidden = false; box.replaceChildren();
+    const add = (ok, text, cls) => { const d = document.createElement('div'); d.className = 'chk ' + (cls || (ok ? 'ok' : 'bad')); d.textContent = (cls ? '' : ok ? '✓ ' : '✕ ') + text; box.appendChild(d); };
+    const timeout = (ms) => new Promise((r) => setTimeout(() => r('timeout'), ms));
+    $('#btnCheck').disabled = true;
+    const res = { lib: typeof Peer !== 'undefined' };
+    add(res.lib, res.lib ? 'Connection library loaded' : 'Connection library did not load');
+
+    try {
+      const r = await Promise.race([fetch('https://0.peerjs.com/peerjs/id', { cache: 'no-store' }), timeout(8000)]);
+      res.relay = r !== 'timeout' && r.ok;
+    } catch { res.relay = false; }
+    add(res.relay, res.relay ? 'Pairing relay reachable (0.peerjs.com)' : 'Pairing relay NOT reachable (0.peerjs.com)');
+
+    res.ws = await Promise.race([new Promise((resolve) => {
+      try {
+        const ws = new WebSocket('wss://0.peerjs.com/peerjs?key=peerjs&id=chk' + randomCode() + '&token=chk' + randomCode());
+        ws.onopen = () => { ws.close(); resolve(true); };
+        ws.onerror = () => resolve(false);
+      } catch { resolve(false); }
+    }), timeout(8000).then(() => false)]);
+    add(res.ws, res.ws ? 'Live pairing connection works' : 'Live pairing connection (WebSocket) blocked');
+
+    res.stun = await Promise.race([new Promise((resolve) => {
+      try {
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        pc.createDataChannel('x');
+        pc.onicecandidate = (e) => { if (e.candidate && /typ srflx/.test(e.candidate.candidate)) { pc.close(); resolve(true); } };
+        pc.createOffer().then((o) => pc.setLocalDescription(o)).catch(() => resolve(false));
+      } catch { resolve(false); }
+    }), timeout(7000).then(() => false)]);
+    add(res.stun, res.stun ? 'Direct device-to-device link possible on this network' : 'Direct device-to-device link blocked on this network');
+
+    let msg;
+    if (!res.lib) msg = 'The page did not load fully. Reload it.';
+    else if (!res.relay || !res.ws) msg = 'This network or device blocks the pairing relay, so the two devices cannot find each other. It is probably a school/work filter, VPN or ad-blocker. Try turning off any VPN/ad-blocker, or use a different device or network.';
+    else if (!res.stun) msg = 'Pairing works but direct links are blocked here (firewall, school network or VPN). Try the same Wi-Fi on both devices, or a different network.';
+    else msg = 'This device looks fine. If it still fails, run this check on the OTHER device too - the block may be there.';
+    add(true, msg, 'sum');
+    $('#btnCheck').disabled = false;
+  }
+
   // ---------------------------------------------------------------- wiring
+  $('#btnCheck').addEventListener('click', runCheck);
   $('#btnHost').addEventListener('click', host);
   $('#btnJoin').addEventListener('click', () => { showError(''); showRole('join'); });
   $('#btnConnect').addEventListener('click', () => join($('#codeInput').value));
