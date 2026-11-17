@@ -1,0 +1,35 @@
+# Builds the self-contained Windows app so nobody has to install Node.js. Run it from the
+# Actions tab ("Run workflow"), or push a tag like v1.0.0 to also attach the zip to a GitHub
+# release (alongside the Mac build).
+name: Build Windows app
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build app
+        working-directory: electron-app
+        run: |
+          npm ci
+          npx electron-packager . "Local Files Toolkit" --platform=win32 --arch=x64 --out=dist --icon=icon.ico --overwrite --prune=true --ignore="^/dist"
+      - name: Zip
+        run: Compress-Archive -Path "electron-app\dist\Local Files Toolkit-win32-x64" -DestinationPath "Local-Files-Toolkit-Windows.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Local-Files-Toolkit-Windows
+          path: Local-Files-Toolkit-Windows.zip
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" Local-Files-Toolkit-Windows.zip --generate-notes || gh release upload "${{ github.ref_name }}" Local-Files-Toolkit-Windows.zip --clobber
