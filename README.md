@@ -27,11 +27,9 @@ Both find and fix exactly the same things and produce byte-identical results.
 
 A rounded, Spotify-style window. Drag a folder onto it or use **Choose folder…**.
 
-**No prerequisites needed** if you have the packaged app: on Windows just double-click `Local Files Toolkit.bat` (it opens `electron-app/dist/Local Files Toolkit-win32-x64/Local Files Toolkit.exe` if present), and on macOS `Local Files Toolkit.command` (it opens `electron-app/dist/Local Files Toolkit-darwin-arm64|x64/Local Files Toolkit.app`). Nothing to install - that build already contains everything it needs.
+**Nothing to install.** On a Mac, download `Local-Files-Toolkit-Mac.zip` (built by the *Build Mac app* GitHub Action - Actions tab > Run workflow, or push a `v*` tag and it lands on the release), unzip it and open `Local Files Toolkit.app`. It works on Intel and Apple Silicon and contains everything it needs: no Python, no Node.js, no Terminal, no Apple command line tools. The first time only, macOS asks for confirmation because the app isn't notarized by Apple: **right-click the app > Open > Open** (on macOS 15+: open it once, then *System Settings > Privacy & Security > Open Anyway*). `Local Files Toolkit.command` (double-click) also clears that flag and opens the app if it sits next to it. On Windows just double-click `Local Files Toolkit.bat` (it opens `electron-app/dist/Local Files Toolkit-win32-x64/Local Files Toolkit.exe` if present).
 
-The macOS app isn't code-signed, so if you copy it to another Mac (AirDrop/zip/cloud drive) Gatekeeper may call it "damaged" - it isn't. `Local Files Toolkit.command` and `Setup.command` clear the quarantine flag that causes this before opening it; if you ever open the `.app` directly and hit that message, run `xattr -cr "path/to/Local Files Toolkit.app"` once in Terminal.
-
-A packaged build isn't included in this folder by default (it's a few hundred MB); build one yourself once Node.js is installed:
+If you'd rather build it yourself, or a packaged build isn't included in this folder by default (it's a few hundred MB); build one yourself once Node.js is installed:
 
 ```bash
 cd electron-app
@@ -44,7 +42,7 @@ Both scripts can be run from either OS (electron-packager just assembles the tar
 
 Without a packaged build, `Local Files Toolkit.bat`/`.command` fall back to running `npm install` and launching with `npx electron .` the first time - that path still needs Node.js installed.
 
-**Run `Setup.bat` (Windows) or `Setup.command` (macOS) once first** and it'll handle all of that for you: it checks for Python 3 and the `mutagen` package (installing them if missing), and only if there's no packaged build already in `electron-app/dist`, it also checks for Node.js (installing it via `winget`/Homebrew if it can) and runs `npm install`. Safe to run more than once.
+`Setup.bat` / `Setup.command` are only needed to run the app *from source* (they install Node.js and the app's packages). Tag songs needs nothing extra on any platform.
 
 Command line, no window:
 
@@ -80,7 +78,7 @@ Both apps now open on a main menu: **Fix local files** or **Tag songs**.
 
 Tag songs matches each file to a public Google-Sheets song tracker (paste the link) by title and length, then writes title (versions as `V1`, `V2`), artist (features comma-separated), album (the era) and the era cover. A file named after one of a song's alternate names - the ones listed in their own line below the feat/prod lines, or an "also known as" in the notes - matches just as well as one named after the tracker's main title, and a file name that just has the song title inside it (extra track numbers, "(Snippet)", etc.), or that's itself inside a longer tracker title, matches too. It shows the matches first and backs up originals before writing.
 
-This needs Python 3 and the `mutagen` package - both apps install `mutagen` on the fly the first time you use Tag songs, no `pip install` needed by hand. Python 3 itself ships with macOS already; on Windows, if it's missing, the Electron app tries to install it automatically too (via `winget`), though you'll need to reopen the app once after that finishes.
+In the app this is built in (pure JavaScript, `electron-app/src/tagger.js`) - no Python, `mutagen` or `pip`. The command-line `tagger.py` below is optional and still needs Python 3 + `mutagen`.
 
 You can paste more than one tracker link - one per line, or comma-separated - to match a folder against several trackers (e.g. several artists, or a tracker split across sheets) in one go. Each song keeps its own tracker's artist for the album-artist tag.
 

@@ -109,56 +109,11 @@ ipcMain.handle('tunnel-stop', () => { tunnel.stop(); share.setPublicHost(null); 
 app.on('before-quit', () => { tunnel.stop(); share.stop(); });
 
 
-// ---------------------------------------------------------------- tag songs (runs ../tagger.py with Python + mutagen)
-const { spawn } = require('child_process');
-
-// On Windows, Python isn't bundled with the OS - try to install it with winget (built into
-// Windows 10 1709+/11) so nobody has to do that by hand either. mutagen auto-installs itself
-// from inside tagger.py, so it isn't handled here.
-function installPythonWindows() {
-  return new Promise((resolve, reject) => {
-    const p = spawn('winget', ['install', '-e', '--id', 'Python.Python.3.12', '--silent',
-      '--accept-package-agreements', '--accept-source-agreements'], { env: process.env });
-    let err = '';
-    p.stderr.on('data', (d) => (err += d));
-    p.on('error', reject);
-    p.on('close', (code) => (code === 0 ? resolve() : reject(new Error(err))));
-  });
-}
-
-function runTagger(args) {
-  const script = app.isPackaged ? path.join(process.resourcesPath, 'tagger.py') : path.join(__dirname, '..', 'tagger.py');
-  const tries = process.platform === 'win32' ? ['python', 'py', 'python3'] : ['python3', 'python'];
-  return new Promise((resolve, reject) => {
-    const attempt = (i, triedInstall) => {
-      if (i >= tries.length) {
-        if (!triedInstall && process.platform === 'win32') {
-          return installPythonWindows().then(() => attempt(0, true))
-            .catch(() => reject(new Error('Python 3 was not found and could not be installed automatically. Install it from python.org, then try again.')));
-        }
-        return reject(new Error(triedInstall
-          ? 'Python 3 was just installed - please close and reopen this app, then try again.'
-          : 'Python 3 was not found. Install it from python.org, then try again.'));
-      }
-      const p = spawn(tries[i], [script, ...args], { env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
-      let out = '', err = '';
-      p.stdout.on('data', (d) => (out += d)); p.stderr.on('data', (d) => (err += d));
-      p.on('error', () => attempt(i + 1, triedInstall));
-      p.on('close', (code) => {
-        if (code !== 0) return reject(new Error(err.trim().split('\n').pop() || 'Tagging failed'));
-        try { resolve(JSON.parse(out)); } catch { reject(new Error('Unexpected output from tagger')); }
-      });
-    };
-    attempt(0, false);
-  });
-}
+// ---------------------------------------------------------------- tag songs (pure JavaScript - see src/tagger.js)
+const tagger = require('./src/tagger');
 ipcMain.handle('tag-run', async (_e, { link, folder, apply, backup, overrides, cover }) => {
   if (!isDir(folder)) throw new Error('That folder no longer exists.');
-  const args = [link, folder, '--json'];
-  if (overrides && Object.keys(overrides).length) args.push('--overrides', JSON.stringify(overrides));
-  if (cover) args.push('--cover', cover);
-  if (apply) { args.push('--apply'); if (!backup) args.push('--no-backup'); }
-  return runTagger(args);
+  return tagger.run({ link, folder, apply: !!apply, backup: backup !== false, overrides, cover });
 });
 
 // ---------------------------------------------------------------- headless self-test (used only when LFF_TEST_FOLDER is set)

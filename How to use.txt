@@ -4,9 +4,14 @@ LOCAL FILES FIXER
 Finds and fixes the hidden problems in .mp3 / .m4a files that make Spotify "Local files"
 grey out, or fail to match between your PC, Mac and phone.
 
-FIRST TIME? Double-click "Setup.bat" (Windows) or "Setup.command" (Mac) once. It installs
-  whatever this needs - Python 3, the "mutagen" package, and Node.js if there's no ready-made
-  app already - and skips anything you already have. Safe to run again any time.
+FIRST TIME?  Nothing needs installing. On a Mac, unzip the Mac download and open
+  "Local Files Toolkit.app" (first time only: right-click it > Open > Open). On Windows,
+  double-click "Local Files Toolkit.bat".
+  If something won't open or install, double-click "Setup.bat" (Windows) or "Setup.command"
+  (Mac). It checks your computer, installs anything that is missing (only needed to run the app
+  from source), and lists in plain words any Windows / macOS setting or permission that is in
+  the way - for example a blocked install, a "Windows protected your PC" box, or a network set
+  to Public that stops "Send files" reaching your phone. Safe to run as many times as you like.
 
 TWO VERSIONS (they find and fix exactly the same things)
   NEW LOOK (recommended)   Double-click "Local Files Toolkit.bat" (Windows) or
@@ -42,34 +47,23 @@ SAFETY
   - Close Spotify first if it tells you a file couldn't be written.
 
 ON A MAC
-  New look: double-click "Local Files Toolkit.command". If there's no ready-made app in
-                           electron-app/dist, it needs Node.js (https://nodejs.org) to install
-                           Electron the first time instead - give it a minute.
-                           If macOS says it can't be opened, right-click it, choose Open, then confirm.
-                           Or in Terminal:  cd electron-app && npm install && npx electron .
-  Classic:  python3 local_files_fixer.py
+  Open "Local Files Toolkit.app" from the Mac download (works on Intel and Apple Silicon, needs no
+  Python, Node.js or Terminal). Because the app isn't notarized by Apple, the very first time use
+  right-click > Open > Open. (macOS 15 and later: open it once, then System Settings > Privacy &
+  Security > Open Anyway.) If you have this whole folder instead, double-click
+  "Local Files Toolkit.command" - it clears the "damaged" flag for you and opens the app.
 
-  "IS DAMAGED AND CAN'T BE OPENED"? This app isn't code-signed, so copying the ready-made app
-  to another Mac (AirDrop, zip, a cloud drive) makes macOS show this - it isn't really damaged.
-  "Local Files Toolkit.command" and "Setup.command" already clear that flag automatically before
-  opening it, so this should only ever come up if you open the .app directly yourself. If it
-  does, run this once in Terminal (fixing the path if you moved the app elsewhere):
-      xattr -cr "electron-app/dist/Local Files Toolkit-darwin-arm64/Local Files Toolkit.app"
-
-TAG SONGS - NO MANUAL INSTALLS
-  Tag songs needs Python 3 and a small package called "mutagen". Python already comes with
-  macOS. Both apps install mutagen by themselves the first time you use Tag songs - no need to
-  run pip yourself. On Windows, if Python itself is missing, the New Look app tries to install
-  it automatically too; if that happens, just close and reopen the app once it's done.
+TAG SONGS - NOTHING TO INSTALL
+  Tag songs is built into the app. No Python, no extra packages.
 
 BUILDING A READY-MADE APP (so nobody needs Node.js at all)
-  With Node.js installed once, on either Windows or Mac:
+  Mac: on GitHub, Actions tab > "Build Mac app" > Run workflow. Download the zip it makes.
+  Windows (or Mac, from any computer with Node.js):
       cd electron-app
       npm install
-      npm run package        (Windows build, works from Mac or Windows)
-      npm run package:mac    (Mac build, works from Mac or Windows)
-  Hand the resulting electron-app\dist folder(s) to anyone else and the .bat/.command files
-  above will use them automatically - no installs needed on their end.
+      npm run package        (Windows build)
+      npm run package:mac    (Mac build)
+  Hand the result to anyone else - nothing to install on their end.
 
 COMMAND LINE (optional, no window)
   node electron-app/src/cli.js "D:\Music"                 just list the problems

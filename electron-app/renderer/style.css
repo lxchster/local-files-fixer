@@ -21,6 +21,7 @@ body {
 .glow { display: none; }
 
 .dragbar { position: fixed; top: 0; left: 0; right: 0; height: 38px; -webkit-app-region: drag; z-index: 5; display: flex; align-items: center; padding-left: 16px; }
+:root.mac .dragbar { padding-left: 84px; } /* leave room for the macOS window buttons */
 .brand { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
 .brand i { width: 9px; height: 9px; border-radius: 50%; background: var(--grad); }
 

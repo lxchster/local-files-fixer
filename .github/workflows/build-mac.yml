@@ -1,0 +1,38 @@
+# Builds the self-contained Mac app (Intel + Apple Silicon in one) so nobody has to install
+# Node.js, Python or Apple's command line tools. Run it from the Actions tab ("Run workflow"),
+# or push a tag like v1.0.0 to also attach the zip to a GitHub release.
+name: Build Mac app
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+jobs:
+  mac:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build universal app
+        working-directory: electron-app
+        run: |
+          npm ci
+          npx electron-packager . "Local Files Toolkit" --platform=darwin --arch=universal --out=dist \
+            --icon=icon.icns --overwrite --prune=true --ignore="^/dist"
+      - name: Sign locally (ad-hoc) and zip
+        run: |
+          APP="electron-app/dist/Local Files Toolkit-darwin-universal/Local Files Toolkit.app"
+          codesign --force --deep --sign - "$APP"
+          ditto -c -k --keepParent "$APP" "Local-Files-Toolkit-Mac.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Local-Files-Toolkit-Mac
+          path: Local-Files-Toolkit-Mac.zip
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" Local-Files-Toolkit-Mac.zip --generate-notes || gh release upload "${{ github.ref_name }}" Local-Files-Toolkit-Mac.zip --clobber

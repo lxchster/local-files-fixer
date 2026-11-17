@@ -1,5 +1,6 @@
 'use strict';
 (() => {
+  if (window.api && window.api.platform === 'darwin') document.documentElement.classList.add('mac'); // room for the window buttons
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const BADGE = { mp3: 'MP3', m4a: 'M4A', junk: 'MAC', minor: 'OPTIONAL' };

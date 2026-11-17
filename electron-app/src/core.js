@@ -98,7 +98,7 @@ function parseMp3Head(buf, base) {
   return info;
 }
 
-function mp3Problems(info) {
+function mp3Problems(info, endPos) {
   if (!info || info.tag !== 'Info') return []; // no header, or a VBR header that must stay
   const out = [];
   const h = info.hdr;
@@ -115,6 +115,17 @@ function mp3Problems(info) {
       out.push(`length is ${reads[0].toFixed(2)} s, just under a whole second, so apps can show ${mmss(fl[0])} or ${mmss(fl[fl.length - 1])}`);
     }
   }
+  // Some apps ignore the header's frame count and work the length out from file size / bitrate. For files
+  // whose frames don't use the usual padding pattern (e.g. many ffmpeg 320 kbps files) that comes out a
+  // little SHORT, which can land just under a whole second while the real length is just over it.
+  if (n && !out.length && endPos) {
+    const real = n * 1152 / h.sr;
+    const est = (endPos - info.ffo) * 8 / (h.kbps * 1000);
+    if (Math.floor(est) !== Math.floor(real)) {
+      const lo = Math.min(Math.floor(est), Math.floor(real)), hi = Math.max(Math.floor(est), Math.floor(real));
+      out.push(`length is ${real.toFixed(2)} s, but working it out from the file size gives ${est.toFixed(2)} s, so apps can show ${mmss(lo)} or ${mmss(hi)}`);
+    }
+  }
   return out;
 }
 
@@ -123,7 +134,9 @@ function scanMp3(file) {
   try {
     const start = id3v2End(readAt(fd, 0, 10));
     const info = parseMp3Head(readAt(fd, start, 16384), start);
-    return mp3Problems(info);
+    const size = fs.fstatSync(fd).size;
+    const hasV1 = size >= 128 && readAt(fd, size - 128, 3).toString('latin1') === 'TAG';
+    return mp3Problems(info, size - (hasV1 ? 128 : 0));
   } finally { fs.closeSync(fd); }
 }
 

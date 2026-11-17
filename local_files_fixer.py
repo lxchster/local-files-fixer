@@ -162,7 +162,7 @@ def _mmss(sec):
     return "%d:%02d" % (sec // 60, sec % 60)
 
 
-def mp3_problems(info):
+def mp3_problems(info, end_pos=None):
     """List of human-readable problems for a CBR 'Info' length header (empty = fine)."""
     if not info or info["tag"] != b"Info":
         return []  # no header, or a VBR (Xing) header that must stay
@@ -180,6 +180,16 @@ def mp3_problems(info):
         if len(fl) > 1:
             out.append("length is %.2f s, just under a whole second, so apps can show %s or %s" % (
                 reads[0], _mmss(fl[0]), _mmss(fl[-1])))
+    # Some apps ignore the header's frame count and work the length out from file size / bitrate. For files
+    # whose frames don't use the usual padding pattern (e.g. many ffmpeg 320 kbps files) that comes out a
+    # little SHORT, which can land just under a whole second while the real length is just over it.
+    if n and not out and end_pos:
+        real = n * 1152 / h["sr"]
+        est = (end_pos - info["ffo"]) * 8 / (h["kbps"] * 1000)
+        if math.floor(est) != math.floor(real):
+            lo, hi = sorted((math.floor(est), math.floor(real)))
+            out.append("length is %.2f s, but working it out from the file size gives %.2f s, so apps can show %s or %s"
+                       % (real, est, _mmss(lo), _mmss(hi)))
     return out
 
 
@@ -188,9 +198,14 @@ def scan_mp3(path):
         start = id3v2_end(f.read(10))
         f.seek(start)
         buf = f.read(16384)
+        f.seek(0, 2)
+        size = f.tell()
+        tail = b""
+        if size >= 128:
+            f.seek(size - 128)
+            tail = f.read(3)
     info = parse_mp3_head(buf, start)
-    probs = mp3_problems(info)
-    return probs
+    return mp3_problems(info, size - (128 if tail == b"TAG" else 0))
 
 
 def fix_mp3(path):
