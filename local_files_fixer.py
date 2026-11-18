@@ -1257,7 +1257,8 @@ def run_gui(initial_folder=None):
             root.after(80, self._poll)
 
         def pick_name(self, event):
-            """Click a file to choose its preferred name (alternate names listed on the tracker)."""
+            """Click a matched file to choose a different name for it, or - when the tracker had
+            more than one plausible match - a different song entirely."""
             iid = self.tree.identify_row(event.y)
             if not iid or self.busy:
                 return
@@ -1265,20 +1266,35 @@ def run_gui(initial_folder=None):
             if not it.get("matched") or it.get("manual"):
                 self.edit_manual(iid)
                 return
-            names = [it["orig_title"]] + [a for a in it.get("alts", []) if a != it["orig_title"]]
-            if len(names) < 2:
-                self.status.set("No other names listed for \"%s\" - keeping its title." % it["orig_title"])
+            opts = it.get("options", [])
+            if len(opts) < 2:
+                self.status.set("No other matches listed for \"%s\" - keeping its title." % it["orig_title"])
                 return
+            base = opts[0]
             menu = tk.Menu(self.root, tearoff=0, bg=PANEL2, fg=TEXT, activebackground=SELECT, activeforeground="#ffffff",
                            bd=0, relief="flat", font=(FAM, 10))
 
-            def use(n):
-                it["title"] = n
-                self.tree.set(iid, "title", n)
-            for n in names:
-                menu.add_command(label=("\u2713  " if n == it["title"] else "     ") + n +
-                                 ("   (tracker's main name)" if n == it["orig_title"] else ""),
-                                 command=lambda n=n: use(n))
+            def use(o):
+                it["title"], it["artist"], it["album"] = o["title"], o["artist"], o["album"]
+                it["album_artist"], it["cover"] = o.get("album_artist"), o.get("cover")
+                self.tree.set(iid, "title", it["title"])
+                self.tree.set(iid, "artist", it["artist"])
+                self.tree.set(iid, "album", it["album"])
+                self.tree.set(iid, "cover", "manual" if self.cover_path else ("yes" if it["cover"] else "no"))
+                self.tree.item(iid, tags=() if (self.cover_path or it["cover"]) else ("bad",))
+
+            seen = set()
+            for o in opts:
+                key = (o["title"], o["artist"], o["album"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                differs = o["artist"] != base["artist"] or o["album"] != base["album"]
+                label = o["title"] + ("   \u2014  %s  [%s]" % (o["artist"], o["album"]) if differs else "")
+                current = it["title"] == o["title"] and it["artist"] == o["artist"] and it["album"] == o["album"]
+                menu.add_command(label=("\u2713  " if current else "     ") + label +
+                                 ("   (tracker's main match)" if o is base else ""),
+                                 command=lambda o=o: use(o))
             x, y, w, h = self.tree.bbox(iid, "title") or (event.x, event.y, 0, 0)
             try:
                 menu.tk_popup(self.tree.winfo_rootx() + x, self.tree.winfo_rooty() + y + h)

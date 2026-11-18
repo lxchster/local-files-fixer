@@ -82,11 +82,10 @@ ipcMain.handle('fetch-cover', async (_e, url) => {
   if (!url) return null;
   if (_coverCache.has(url)) return _coverCache.get(url);
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const buf = Buffer.from(await res.arrayBuffer());
-    const mime = buf[0] === 0x89 && buf[1] === 0x50 ? 'image/png' : buf[0] === 0xff && buf[1] === 0xd8 ? 'image/jpeg' : (res.headers.get('content-type') || 'image/jpeg');
-    const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+    // tagger.fetchCover() already routes through the TLS-trust-aware dispatcher (see tagger.js),
+    // which a plain fetch() here would not - without it this silently fails wherever that's needed
+    const { data, mime } = await tagger.fetchCover(url);
+    const dataUrl = `data:${mime};base64,${data.toString('base64')}`;
     _coverCache.set(url, dataUrl);
     return dataUrl;
   } catch {
@@ -135,9 +134,12 @@ app.on('before-quit', () => { tunnel.stop(); share.stop(); });
 
 // ---------------------------------------------------------------- tag songs (pure JavaScript - see src/tagger.js)
 const tagger = require('./src/tagger');
-ipcMain.handle('tag-run', async (_e, { link, folder, apply, backup, overrides, cover }) => {
+ipcMain.handle('tag-run', async (e, { link, folder, apply, backup, overrides, cover, excluded }) => {
   if (!isDir(folder)) throw new Error('That folder no longer exists.');
-  return tagger.run({ link, folder, apply: !!apply, backup: backup !== false, overrides, cover });
+  return tagger.run({
+    link, folder, apply: !!apply, backup: backup !== false, overrides, cover, excluded,
+    progress: (text, frac) => e.sender.send('tag-progress', { text, frac }),
+  });
 });
 
 // ---------------------------------------------------------------- headless self-test (used only when LFF_TEST_FOLDER is set)

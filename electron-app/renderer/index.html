@@ -38,9 +38,12 @@
       <div id="tPath" class="field">No folder chosen yet</div>
       <button id="tFind" class="btn ghost" disabled>Find matches</button>
     </section>
-    <section class="progress"><div id="tStatus" class="status">Paste the link(s), choose the folder with the songs, then Find matches.</div></section>
+    <section class="progress">
+      <div class="bar"><i id="tBarFill"></i></div>
+      <div id="tStatus" class="status">Paste the link(s), choose the folder with the songs, then Find matches.</div>
+    </section>
     <section class="card list">
-      <div class="thead tagrow"><span>Cover</span><span>File</span><span>Title</span><span>Artist</span><span>Album</span><span>Match</span></div>
+      <div class="thead tagrow"><span>Apply</span><span>Cover</span><span>File</span><span>Title</span><span>Artist</span><span>Album</span><span>Match</span></div>
       <div id="tRows" class="rows"></div>
       <datalist id="tArtistSuggestions"></datalist>
     </section>

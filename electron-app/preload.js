@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   fix: (ids, backup) => ipcRenderer.invoke('fix', { ids, backup }),
   pickImage: () => ipcRenderer.invoke('pick-image'),
   fetchCover: (url) => ipcRenderer.invoke('fetch-cover', url),
-  tagRun: (link, folder, apply, backup, overrides, cover) => ipcRenderer.invoke('tag-run', { link, folder, apply, backup, overrides, cover }),
+  tagRun: (link, folder, apply, backup, overrides, cover, excluded) => ipcRenderer.invoke('tag-run', { link, folder, apply, backup, overrides, cover, excluded }),
   openBackup: (p) => ipcRenderer.invoke('open-backup', p),
   pickFiles: () => ipcRenderer.invoke('pick-files'),
   shareStart: (paths) => ipcRenderer.invoke('share-start', paths),

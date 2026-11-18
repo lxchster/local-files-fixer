@@ -28,6 +28,7 @@ import datetime
 UA = {"User-Agent": "Mozilla/5.0 (LocalFilesFixer tagger)"}
 AUDIO_EXT = {".mp3", ".m4a", ".wav"}
 MAIN_ARTIST = "Playboi Carti"   # used when a row has no "Artist - " prefix
+LEN_WINDOW = 2   # seconds: a candidate this close in length to the file is treated as a sure match
 
 
 def _get(url, binary=False, timeout=60):
@@ -248,8 +249,11 @@ def load_tracker(link, progress=None, all_tabs=True, artist=None):
         raise RuntimeError("The tracker tab came back empty (is the sheet shared publicly?).")
     songs = parse_song_rows(rows)
     order = [x for i, x in enumerate(e["era"] for e in songs) if i == 0 or x != songs[i - 1]["era"]]
+    # tabs like "Art", "Merch" or "Social" carry fan art, mockups and screenshots, not official
+    # covers - exclude them here too, not just for song rows, or ensure_covers() (below) can latch
+    # an era onto a stray image from one of those tabs just because it happens to name that era
+    tabs = [(g, n) for g, n in list_tabs(sid) if g != gid and not any(k in strip_emoji(n).lower() for k in SKIP_TABS)] if all_tabs else []
     if all_tabs:
-        tabs = [(g, n) for g, n in list_tabs(sid) if g != gid and not any(k in strip_emoji(n).lower() for k in SKIP_TABS)]
         for i, (g, n) in enumerate(tabs):
             say(f"Reading other tabs ({i + 1}/{len(tabs)}): {strip_emoji(n)}...")
             try:
@@ -260,7 +264,7 @@ def load_tracker(link, progress=None, all_tabs=True, artist=None):
     say(f"{len(songs)} tracker rows. Looking up album covers...")
     covers = load_covers(sid, gid, order)
     return {"songs": songs, "covers": covers, "sid": sid, "gid": gid, "artist": MAIN_ARTIST,
-            "tabs": [g for g, _ in list_tabs(sid)] if all_tabs else [gid], "scanned": {gid}}
+            "tabs": [gid] + [g for g, _ in tabs] if all_tabs else [gid], "scanned": {gid}}
 
 
 def split_links(s):
@@ -291,6 +295,14 @@ def load_trackers(links, progress=None, all_tabs=True, artist=None):
     return {"songs": songs, "covers": covers, "sources": sources, "artist": ", ".join(artists)}
 
 
+def _is_header_cell(raw_html, text):
+    """True for an era-header row's first cell - a multi-line stats block ("14 Full / 0 Tagged /
+    ..."), not a song title. Trackers phrase these differently, so this doesn't look for one
+    specific wording: a genuine stats block is reliably multi-line (same signal parse_song_rows()
+    uses for the CSV export), with a couple of known single-line phrasings as a fallback."""
+    return "\n" in text.strip() or "Total Full" in raw_html or "Total Released" in raw_html or "OG File" in raw_html
+
+
 def load_covers(sid, gid, era_order=None):
     """Era cover images live in the tab's HTML view: every era header row carries the cover image
     (the sheet just shows it squashed). Eras whose name is only part of a banner image are paired
@@ -308,7 +320,7 @@ def load_covers(sid, gid, era_order=None):
         cells = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
         if len(cells) < 2:
             continue
-        is_head = "Total Full" in cells[0] or "Total Released" in cells[0]
+        is_head = _is_header_cell(cells[0], cell_text(cells[0]))
         if not is_head:
             if pending is not None:
                 era = next((l.strip() for l in cell_text(cells[0]).split("\n") if l.strip()), "")
@@ -333,26 +345,26 @@ def load_covers(sid, gid, era_order=None):
 
 
 def scan_covers(h, known, covers):
-    """Any row that carries an image and names a known era gives that era its cover (first hit wins)."""
+    """Only a genuine era-header row (the same shape load_covers() reads on the main tab) gives
+    that era its cover here - never a plain song row, even one that happens to name the era and
+    also carries some unrelated image of its own (a screenshot, a feature's avatar, ...); that
+    would attach that one song's picture to the whole era instead of its actual album cover."""
+    def cell_text(c):
+        return htmlmod.unescape(re.sub(r"<[^>]+>", "\n", c.replace("<br>", "\n")))
     for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", h, re.S):
-        if "sheets-images-rt" not in tr:
-            continue
         cells = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
-        era = None
-        for c in cells:
-            for line in htmlmod.unescape(re.sub(r"<[^>]+>", "\n", c.replace("<br>", "\n"))).split("\n"):
-                k = era_key(strip_emoji(line))
-                if k in known and k not in covers:
-                    era = (k, strip_emoji(line).strip())
-                    break
-            if era:
-                break
-        if not era:
+        if len(cells) < 2 or not _is_header_cell(cells[0], cell_text(cells[0])):
             continue
-        urls = re.findall(r'<img src="([^"]+sheets-images-rt[^"]+)"', tr)
+        era = next((l.strip() for l in cell_text(cells[1]).split("\n") if l.strip()), "")
+        k = era_key(strip_emoji(era))
+        if not era or k not in known or k in covers:
+            continue
+        urls = []
+        for c in cells[2:6]:
+            urls += re.findall(r'<img src="([^"]+sheets-images-rt[^"]+)"', c)
         urls.sort(key=lambda u: 1 if "=w425" in u else 0)
         if urls:
-            covers[era[0]] = {"era": era[1], "url": re.sub(r"=w\d+-h\d+$", "=s1200", urls[0])}
+            covers[k] = {"era": strip_emoji(era), "url": re.sub(r"=w\d+-h\d+$", "=s1200", urls[0])}
 
 
 _STOP = {"the", "with", "era", "collab", "collaboration", "collaborations", "and", "of", "a", "feat"}
@@ -377,6 +389,11 @@ def find_cover(tracker, era):
         else:
             sc = 0.0
         sc = max(sc, difflib.SequenceMatcher(None, k, key).ratio() - 0.2)
+        # some trackers give a song a short era label ("FLXTRA") that's really just an abbreviated
+        # form of the era's full name on its banner ("Flex Musix (FLXTRA)") - containment catches
+        # that even when it shares too few whole words/characters to score well above otherwise
+        if _overlaps(k, key):
+            sc = max(sc, 0.8)
         if sc > score:
             best, score = c, sc
     return best if score >= 0.5 else None
@@ -436,48 +453,53 @@ def _overlaps(a, b, min_len=4):
 
 
 def match_file(path, tracker, era_hint=None):
+    """Search the whole tracker through every matching strategy - not just the first one that
+    finds anything - then let scoring (below) pick the best candidate across all of them. This
+    avoids an early, narrow strategy locking in a wrong pick when a different song further down
+    the tracker (only found by a looser strategy) would actually have fit this file better."""
     info = file_stem_info(path)
     dur = audio_length(path)
     songs = tracker["songs"]
     key = info["key"]
-    cands = [s for s in songs if key in (s["key"], s["key_artist"])]
-    how = "name"
+    nov = _strip_ver(key)
+    keys = {}
+    for s in songs:
+        keys.setdefault(s["key"], s)
+        keys.setdefault(s["key_artist"], s)
+        for k in s.get("alt_keys", []):
+            keys.setdefault(k, s)
+    close = difflib.get_close_matches(key, list(keys), n=3, cutoff=0.86)
+    tiers = [
+        ("name", [s for s in songs if key in (s["key"], s["key_artist"])]),
+        ("alternate name", [s for s in songs if key in s.get("alt_keys", [])]),
+        ("name (version differs)",
+         [s for s in songs if nov and nov in (_strip_ver(s["key"]), _strip_ver(s["key_artist"]))]),
+        ("alternate name (version differs)",
+         [s for s in songs if nov and any(nov == _strip_ver(k) for k in s.get("alt_keys", []))]),
+        ("name contains / is within the tracker title",
+         [s for s in songs if _overlaps(key, s["key"]) or _overlaps(key, s["key_artist"])
+          or any(_overlaps(key, k) for k in s.get("alt_keys", []))]),
+        ("close name", [keys[k] for k in close]),
+    ]
+    cands = []
+    how_of = {}
+    for how, group in tiers:
+        for s in group:
+            if id(s) not in how_of:
+                how_of[id(s)] = how
+                cands.append(s)
     if not cands:
-        cands = [s for s in songs if key in s.get("alt_keys", [])]
-        if cands:
-            how = "alternate name"
-    if not cands:  # same name without a version number on either side
-        nov = _strip_ver(key)
-        cands = [s for s in songs if nov and nov in (_strip_ver(s["key"]), _strip_ver(s["key_artist"]))]
-        how = "name (version differs)"
-        if not cands:
-            cands = [s for s in songs if nov and any(nov == _strip_ver(k) for k in s.get("alt_keys", []))]
-            if cands:
-                how = "alternate name (version differs)"
-    if not cands:  # the song title is inside the file name, or the file name is inside the title
-        cands = [s for s in songs if _overlaps(key, s["key"]) or _overlaps(key, s["key_artist"])
-                 or any(_overlaps(key, k) for k in s.get("alt_keys", []))]
-        if cands:
-            how = "name contains / is within the tracker title"
-    if not cands:
-        keys = {}
-        for s in songs:
-            keys.setdefault(s["key"], s)
-            keys.setdefault(s["key_artist"], s)
-            for k in s.get("alt_keys", []):
-                keys.setdefault(k, s)
-        close = difflib.get_close_matches(key, list(keys), n=3, cutoff=0.86)
-        cands = [keys[k] for k in close]
-        how = "close name"
-    if not cands:
-        return None, "no song with that name on the tracker", None
+        return None, "no song with that name on the tracker", None, []
 
     def score(s):
         sc = 0.0
         if era_hint and era_key(s["era"]) == era_hint:
             sc -= 1000
         if dur and s["len"]:
-            sc += min(abs(dur - s["len"]), 60)
+            d = abs(dur - s["len"])
+            # a length match within a couple of seconds is a near-certain sign of the right
+            # song, so it should decisively beat a merely similar-looking title elsewhere
+            sc += -500 + d if d <= LEN_WINDOW else min(d, 60)
         elif s["len"] is None:
             sc += 30
         if key not in (s["key"], s["key_artist"], *s.get("alt_keys", [])):
@@ -485,7 +507,7 @@ def match_file(path, tracker, era_hint=None):
         return sc
     cands.sort(key=score)
     best = cands[0]
-    note = how
+    note = how_of[id(best)]
     if dur and best["len"]:
         d = abs(dur - best["len"])
         note += f", length {int(dur//60)}:{int(dur%60):02d} vs tracker {best['len']//60}:{best['len']%60:02d}"
@@ -493,7 +515,7 @@ def match_file(path, tracker, era_hint=None):
             note += " (differs)"
     if len({(c["era"], c["title"], tuple(c["artists"])) for c in cands if score(c) == score(best)}) > 1:
         note += f", {len(cands)} similar rows - picked first"
-    return best, note, dur
+    return best, note, dur, cands
 
 
 def list_audio(folder):
@@ -514,15 +536,41 @@ def plan(tracker, folder, era=None):
     hint = era_key(era) if era else era_key(os.path.basename(folder))
     items = []
     matched = [(p,) + match_file(p, tracker, hint) for p in list_audio(folder)]
-    ensure_covers(tracker, {m[1]["era"] for m in matched if m[1]})
-    for p, song, note, dur in matched:
+    eras = set()
+    for _, song, _, _, cands in matched:
+        if song:
+            eras.add(song["era"])
+        eras.update(c["era"] for c in cands)
+    ensure_covers(tracker, eras)
+    for p, song, note, dur, cands in matched:
         it = {"path": p, "rel": os.path.relpath(p, folder), "note": note}
         if song:
             era_name = clean_era(song["era"])
             cov = find_cover(tracker, song["era"])
-            it.update(title=song["title"], alts=song.get("alts", []), artist=", ".join(song["artists"]), album=era_name,
+            it.update(title=song["title"], artist=", ".join(song["artists"]), album=era_name,
                       album_artist=song.get("main_artist") or MAIN_ARTIST,
                       cover=cov["url"] if cov else None, matched=True)
+            # every candidate row the matcher considered equally plausible, each with its own
+            # alternate names, flattened into one pick list (index 0 is the auto-picked default).
+            # The picked song always gets a slot; any OTHER candidate only gets one if its length
+            # actually fits the file - otherwise the list fills up with unlikely alternatives. If
+            # the file's own length couldn't be read at all, there's no window to judge by, so
+            # fall back to listing every candidate rather than silently dropping them all.
+            if dur:
+                option_cands = [song] + [c for c in cands if c is not song and c["len"] is not None
+                                          and abs(dur - c["len"]) <= LEN_WINDOW]
+            else:
+                option_cands = cands
+            options = []
+            for c in option_cands:
+                c_cov = find_cover(tracker, c["era"])
+                base = {"title": c["title"], "artist": ", ".join(c["artists"]), "album": clean_era(c["era"]),
+                        "album_artist": c.get("main_artist") or MAIN_ARTIST,
+                        "cover": c_cov["url"] if c_cov else None}
+                options.append(base)
+                for a in c.get("alts", []):
+                    options.append({**base, "title": a})
+            it["options"] = options
         else:
             it.update(matched=False)
         items.append(it)
@@ -631,8 +679,10 @@ def apply_cover(items, path):
 
 
 def apply_overrides(items, overrides):
-    """A string override renames a matched file; a {title, artist, album} override hand-tags a
-    file the tracker couldn't match (title is required, artist/album may be left blank)."""
+    """A string override renames a matched file to one of its alternate names. An object override
+    either hand-tags a file the tracker couldn't match (title required, artist/album may be left
+    blank), or switches a matched file to a different candidate match - title/artist/album and
+    optionally cover, all taken from one of that file's `options` entries."""
     for it in items:
         o = (overrides or {}).get(it["rel"])
         if not o:
@@ -647,6 +697,10 @@ def apply_overrides(items, overrides):
         it["title"] = title
         it["artist"] = (o.get("artist") or "").strip()
         it["album"] = (o.get("album") or "").strip()
+        if "album_artist" in o:
+            it["album_artist"] = (o.get("album_artist") or "").strip() or None
+        if "cover" in o:
+            it["cover"] = o.get("cover") or None
         it["matched"] = True
 
 
